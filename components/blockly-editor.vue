@@ -1,32 +1,33 @@
 <script setup>
-import { onMounted, ref } from "vue";
+import { onMounted, ref } from 'vue';
 
 import * as Blockly from "blockly/core";
-import * as libraryBlocks from "blockly/blocks";
-import { javascriptGenerator } from "blockly/javascript";
 import * as En from "blockly/msg/en";
 
-// Set language messages
-Blockly.setLocale(En);
+import initBlocks from '~/blockly/blocks/gogo-block';
+import initGenerator from '~/blockly/generators/gogo-generator'
 
 const workspace = ref(null);
+const blocklyDiv = ref(null);
+let gogoGenerator = null;
 
 onMounted(() => {
-    workspace.value = Blockly.inject("blocklyDiv", {
-        toolbox: `
-      <xml>
-        <block type="controls_if"></block>
-        <block type="logic_compare"></block>
-        <block type="math_number"></block>
-        <block type="text"></block>
-      </xml>
-    `,
+    initBlocks(Blockly)
+    gogoGenerator = initGenerator(Blockly)
+
+    workspace.value = Blockly.inject('blocklyDiv', {
+        toolbox: toolbox,
+        renderer: 'zelos',
     });
 });
 
 const generateCode = () => {
-    const code = javascriptGenerator.workspaceToCode(workspace.value);
-    console.log("Generated Code:", code);
+    if (workspace.value) {
+        const code = gogoGenerator.workspaceToCode(workspace.value);
+        console.log("Generated Code:\n", code);
+    } else {
+        console.error("workspace ref is not yet available");
+    }
 };
 </script>
 
@@ -37,5 +38,14 @@ const generateCode = () => {
         <button @click="generateCode" class="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
             Generate Code
         </button>
+
+        <xml id="toolbox" style="display: none">
+            <category name="Movement" colour="#418bd2">
+                <block type="control_forward"></block>
+                <block type="control_backward"></block>
+                <block type="control_turn_left"></block>
+                <block type="control_turn_right"></block>
+            </category>
+        </xml>
     </div>
 </template>
