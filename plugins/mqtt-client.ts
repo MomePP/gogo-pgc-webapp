@@ -10,16 +10,11 @@ export default defineNuxtPlugin(() => {
 
     client.on("connect", () => {
         console.log("✅ Connected to MQTT broker");
-        client.subscribe("blockly/response");
+        client.subscribe("gogo-pgc/blockly/command");
     });
 
     client.on("error", (err) => {
-    console.error("❌ MQTT Connection Error:", err);
-  });
-
-
-    client.on("message", (topic, message) => {
-        console.log(`📩 Received: ${message.toString()} on topic: ${topic}`);
+        console.error("❌ MQTT Connection Error:", err);
     });
 
     return {

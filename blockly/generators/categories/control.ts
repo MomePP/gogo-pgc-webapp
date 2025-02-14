@@ -12,15 +12,15 @@ export default function(gogoGenerator: any) {
         return `backward\n`
     }
 
-    gogoGenerator.forBlock['control_turn_left'] = function(block: any, generator: any) {
+    gogoGenerator.forBlock['control_left'] = function(block: any, generator: any) {
         // const degrees = generator.valueToCode(block, 'DEGREES', generator.Order.ATOMIC);
         // return `turnLeft(${degrees});\n`;
-        return `turnleft\n`
+        return `left\n`
     }
 
-    gogoGenerator.forBlock['control_turn_right'] = function(block: any, generator: any) {
+    gogoGenerator.forBlock['control_right'] = function(block: any, generator: any) {
         // const degrees = generator.valueToCode(block, 'DEGREES', generator.Order.ATOMIC);
         // return `turnRight(${degrees});\n`;
-        return `turnright\n`
+        return `right\n`
     }
 }

@@ -33,7 +33,7 @@ export default function(Blockly: any) {
             helpUrl: ''
         },
         {
-            type: 'control_turn_left',
+            type: 'control_left',
             message0: 'Turn left',
             // args0: [{ type: 'input_value', name: 'DEGREES', check: 'Number' }],
             previousStatement: true,
@@ -44,7 +44,7 @@ export default function(Blockly: any) {
             helpUrl: ''
         },
         {
-            type: 'control_turn_right',
+            type: 'control_right',
             message0: 'Turn right',
             // args0: [{ type: 'input_value', name: 'DEGREES', check: 'Number' }],
             previousStatement: true,
