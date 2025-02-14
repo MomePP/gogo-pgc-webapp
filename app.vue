@@ -1,6 +1,15 @@
+<script setup></script>
+
 <template>
-  <div>
-    <NuxtRouteAnnouncer />
-    <NuxtWelcome />
+  <div class="app-container">
+    <NuxtPage />
   </div>
 </template>
+
+<style>
+.app-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+</style>
