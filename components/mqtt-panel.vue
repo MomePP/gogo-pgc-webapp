@@ -2,7 +2,7 @@
 import { ref, inject, onMounted } from "vue";
 
 const { $mqtt } = useNuxtApp()
-const topic = ref("gogo-pgc/blockly/command");
+const topic = ref("gogo-pgc/remote/command");
 const message = ref("");
 const receivedMessages = ref([]);
 

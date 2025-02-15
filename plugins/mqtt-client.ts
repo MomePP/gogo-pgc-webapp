@@ -1,7 +1,7 @@
 import mqtt from "mqtt";
 
 export default defineNuxtPlugin(() => {
-    const brokerUrl = "wss://iot-broker.gogoboard.org:8084/mqtt"; // Replace with your broker URL
+    const brokerUrl = "wss://iot-broker.gogoboard.org:8084/mqtt";
     const client = mqtt.connect(brokerUrl, {
         clean: true,
         connectTimeout: 4000,
@@ -10,7 +10,7 @@ export default defineNuxtPlugin(() => {
 
     client.on("connect", () => {
         console.log("✅ Connected to MQTT broker");
-        client.subscribe("gogo-pgc/blockly/command");
+        client.subscribe("gogo-pgc/+/command");
     });
 
     client.on("error", (err) => {

@@ -10,10 +10,12 @@ import initGenerator from '~/blockly/generators/gogo-generator'
 import customCategory from '~/blockly/custom-category'
 
 const { $mqtt } = useNuxtApp(); // Get Blockly & MQTT from Nuxt plugin
-const receivedMessage = ref(""); // Store last received MQTT message
+const blocklyCommandTopic = ref("gogo-pgc/blockly/command")
+const remoteCommandTopic = ref("gogo-pgc/remote/command")
 let onMessageHandler; // Store the event handler reference
 
 const blocklyDiv = ref(null);
+const generatedCode = ref('');
 let workspace = null;
 let gogoGenerator = null;
 
@@ -77,6 +79,8 @@ onMounted(() => {
                 lastActiveBlock = allBlocks.length > 0 ? allBlocks[allBlocks.length - 1] : null;
             }
         }
+
+        generatedCode.value = gogoGenerator.workspaceToCode(workspace).trim();
     });
 
     window.addEventListener('resize', () => Blockly.svgResize(workspace));
@@ -88,10 +92,10 @@ onMounted(() => {
 
     // Define the MQTT message handler
     onMessageHandler = (topic, message) => {
-        const command = message.toString().trim(); // Convert to string and trim
-        receivedMessage.value = command;
-        console.log(`📩 On topic: ${topic} received: ${message.toString()}`);
+        if (topic != remoteCommandTopic.value) return;
 
+        const command = message.toString().trim(); // Convert to string and trim
+        console.log(`📩 On topic: ${topic} received: ${message.toString()}`);
 
         // Check if the message is a known Blockly block command
         createBlockFromCommand(command);
@@ -106,16 +110,6 @@ onBeforeUnmount(() => {
         $mqtt.removeListener("message", onMessageHandler); // Remove listener
     }
 });
-
-const generateCode = () => {
-    if (workspace) {
-        const code = gogoGenerator.workspaceToCode(workspace);
-        console.log("Generated Code:\n", code);
-        // TODO: send to MQTT per command by split generated line
-    } else {
-        console.error("workspace ref is not yet available");
-    }
-};
 
 const createBlockFromCommand = (command) => {
     const blockMapping = {
@@ -143,15 +137,63 @@ const createBlockFromCommand = (command) => {
     // Update lastActiveBlock to this new MQTT-created block
     lastActiveBlock = newBlock;
 };
+
+const copyCode = () => {
+    navigator.clipboard.writeText(generatedCode.value);
+};
+
+const publishToMQTT = () => {
+    if ($mqtt && generatedCode.value != "") {
+        // Split commands line by line
+        const commands = generatedCode.value.trim().split("\n");
+        const topic = blocklyCommandTopic.value
+
+        // Send each command separately
+        commands.forEach((command, index) => {
+            setTimeout(() => {
+                $mqtt.publish(topic, command);
+                console.log(`📩 On topic: ${topic} sent: ${command}`);
+            }, index * 500); // 500ms delay between commands
+        });
+    }
+};
 </script>
 
 <template>
-    <div class="p-6 h-screen bg-gray-100">
-        <h1 class="text-2xl font-bold mb-4">Blockly Editor</h1>
-        <div id="blocklyDiv" class="border rounded bg-white h-4/5"></div>
-        <button @click="generateCode" class="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
-            Generate Code
-        </button>
+    <div class="p-6 h-screen bg-gray-100 flex flex-col">
+        <h1 class="text-2xl font-bold mb-4 text-center">Blockly Editor</h1>
+
+        <!-- Main Layout: Blockly Left, Code Right -->
+        <div class="flex flex-1 gap-4">
+            <!-- Blockly Workspace -->
+            <div class="flex-1 border rounded bg-white">
+                <div id="blocklyDiv" class="w-full h-full"></div>
+            </div>
+
+            <!-- Code & Publish Section -->
+            <div class="w-1/3 flex flex-col">
+                <!-- Generated Code Display (2/3 of height) -->
+                <div class="flex-1 p-4 bg-gray-900 text-white rounded-md">
+                    <h3 class="text-lg font-bold mb-2 flex justify-between items-center">
+                        Generated Code
+                        <button @click="copyCode" class="text-xs px-2 py-1 bg-blue-600 rounded">
+                            Copy
+                        </button>
+                    </h3>
+                    <p class="p-4 bg-gray-800 text-sm rounded font-mono whitespace-pre-wrap overflow-auto h-2/3">
+                        {{ generatedCode }}
+                    </p>
+                </div>
+
+                <!-- Publish Button (1/3 of height) -->
+                <div class="mt-4 flex justify-center">
+                    <button @click="publishToMQTT"
+                        class="px-6 py-3 bg-green-600 text-white font-bold rounded hover:bg-green-700">
+                        Publish to MQTT
+                    </button>
+                </div>
+            </div>
+        </div>
 
         <xml id="toolbox" style="display: none">
             <category name="Movement" categorystyle="movement_category">
