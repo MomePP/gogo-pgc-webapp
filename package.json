@@ -8,7 +8,8 @@
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
-    "gh-pages": "nuxt build --preset github_pages"
+    "build-gh-pages": "nuxt build --preset github_pages",
+    "deploy-gh-pages": "npx gh-pages --dotfiles -d .output/public"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.0.6",
