@@ -1,7 +1,7 @@
 import mqtt from "mqtt";
 
 export default defineNuxtPlugin(() => {
-    const brokerUrl = "wss://iot-broker.gogoboard.org:8084/mqtt";
+    const brokerUrl = "wss://broker.emqx.io:8084/mqtt";
     const client = mqtt.connect(brokerUrl, {
         clean: true,
         connectTimeout: 4000,
