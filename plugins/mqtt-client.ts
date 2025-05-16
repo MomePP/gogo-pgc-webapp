@@ -10,7 +10,6 @@ export default defineNuxtPlugin(() => {
 
     client.on("connect", () => {
         console.log("✅ Connected to MQTT broker");
-        client.subscribe("gogo-pgc/+/command");
     });
 
     client.on("error", (err) => {

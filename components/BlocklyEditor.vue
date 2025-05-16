@@ -28,7 +28,7 @@ onMounted(() => {
     Blockly.setLocale(En);
 
     workspace = Blockly.inject('blocklyDiv', {
-        toolbox: document.getElementById("toolbox"),
+        toolbox: document.getElementById('toolbox'),
         renderer: 'zelos',
         theme: Blockly.Theme.defineTheme('modern', {
             base: Blockly.Themes.Zelos,
@@ -161,7 +161,7 @@ const publishToMQTT = () => {
 
 <template>
     <div class="p-6 h-screen bg-gray-100 flex flex-col">
-        <h1 class="text-2xl font-bold mb-4 text-center">Blockly Editor</h1>
+        <h1 class="text-2xl font-bold mb-4 text-center">GoGo Programming Continuum</h1>
 
         <!-- Main Layout: Blockly Left, Code Right -->
         <div class="flex flex-1 gap-4">
