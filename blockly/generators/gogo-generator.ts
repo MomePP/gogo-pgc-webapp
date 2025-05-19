@@ -256,6 +256,13 @@ export default function(Blockly: any) {
         return commentCode + code + nextCode
     }
 
+
+    gogoGenerator.forBlock['main_start'] = function(block: any, generator: any) {
+        let statementsStatement = generator.statementToCode(block, 'statement')
+        let code = 'start\n' + statementsStatement + 'end'
+        return code
+    }
+
     mathGenerator(gogoGenerator)
 
     controlGenerator(gogoGenerator)

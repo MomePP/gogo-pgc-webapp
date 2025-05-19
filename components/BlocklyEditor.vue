@@ -39,6 +39,11 @@ onMounted(() => {
         theme: Blockly.Theme.defineTheme('modern', {
             base: Blockly.Themes.Zelos,
             blockStyles: {
+                'basic_blocks': {
+                    'colourPrimary': '#F4C95D',
+                    'colourSecondary': '#FFE082',
+                    'colourTertiary': '#D6A84E',
+                },
                 'movement_blocks': {
                     'colourPrimary': '#2965CC',
                     'colourSecondary': '#66A3FF',
@@ -71,27 +76,41 @@ onMounted(() => {
         theme: 'modern',
     });
 
+    let xmlWorkspace = Blockly.utils.xml.textToDom(`<xml><block type="main_start"></block></xml>`)
+    Blockly.Xml.domToWorkspace(xmlWorkspace, workspace)
+    workspace.scrollCenter()
+
     // Track user-added blocks
     workspace.addChangeListener((event) => {
-        // get the last created block
-        if (event.type === Blockly.Events.BLOCK_CREATE) {
-            const newBlocks = event.ids.map((id) => workspace.getBlockById(id));
-            lastActiveBlock = newBlocks[newBlocks.length - 1];
+        // BLOCK_CREATE — track single new block
+        if (event.type === Blockly.Events.BLOCK_CREATE && event.ids.length === 1) {
+            const newBlock = workspace.getBlockById(event.ids[0]);
+            if (newBlock && !newBlock.isShadow()) {
+                lastActiveBlock = newBlock;
+            }
         }
 
-        // track the block being moved as active
+        // BLOCK_MOVE — track when a block is moved
         if (event.type === Blockly.Events.BLOCK_MOVE) {
             const movedBlock = workspace.getBlockById(event.blockId);
-            if (movedBlock) {
+            if (movedBlock && !movedBlock.isShadow()) {
                 lastActiveBlock = movedBlock;
             }
         }
 
-        // if the last active block is deleted, find a new valid one
+        // BLOCK_SELECT — track when a block is clicked/selected
+        if (event.type === Blockly.Events.SELECTED && event.newElementId) {
+            const selectedBlock = workspace.getBlockById(event.newElementId);
+            if (selectedBlock && !selectedBlock.isShadow()) {
+                lastActiveBlock = selectedBlock;
+            }
+        }
+
+        // BLOCK_DELETE — handle when last active block is deleted
         if (event.type === Blockly.Events.BLOCK_DELETE) {
             if (lastActiveBlock && event.ids.includes(lastActiveBlock.id)) {
-                const allBlocks = workspace.getAllBlocks(false);
-                lastActiveBlock = allBlocks.length > 0 ? allBlocks[allBlocks.length - 1] : null;
+                const remainingBlocks = workspace.getAllBlocks(false);
+                lastActiveBlock = remainingBlocks.length > 0 ? remainingBlocks[remainingBlocks.length - 1] : null;
             }
         }
 
@@ -221,11 +240,32 @@ const controlPlay = async () => {
 
     isPlaying.value = true;
 
-    const commands = generatedCode.value.trim().split("\n");
+    const allLines = generatedCode.value.trim().split("\n");
     const topic = blocklyCommandTopic.value + channel.value;
 
+    const commands = [];
+    let inStartBlock = false;
+
+    for (const line of allLines) {
+        const trimmed = line.trim().toLowerCase();
+
+        if (trimmed === "start") {
+            inStartBlock = true;
+            continue;
+        }
+
+        if (trimmed === "end") {
+            inStartBlock = false;
+            break; // stop parsing after end
+        }
+
+        if (inStartBlock) {
+            commands.push(line.trim());
+        }
+    }
+
     for (let i = 0; i < commands.length && isPlaying.value; i++) {
-        const command = commands[i].trim();
+        const command = commands[i];
 
         if (command.toLowerCase().startsWith("wait ")) {
             const delay = parseInt(command.split(" ")[1]);
@@ -377,6 +417,7 @@ const controlStop = () => {
     padding: 0.8em 16px;
     margin-bottom: 0.5em;
     border-radius: 4px;
+    border-width: thin;
 }
 
 /* Stacks the icon on top of the label. */
