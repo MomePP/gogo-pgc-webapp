@@ -1,14 +1,14 @@
-<script setup>
-import { ref, inject, onMounted } from "vue";
+<script setup lang='ts'>
+import { ref, onMounted } from 'vue';
+import { useChannel } from '~/composables/useChannel';
 
 const { $mqtt } = useNuxtApp()
 
-const topic = ref("gogo-pgc/remote/command/")
-const channel = ref("")
-const message = ref("")
+const topic = ref("gogo-pgc/remote/")
+const { channel } = useChannel()
 
-const received_messages = ref([])
-const show_messages = ref(false)
+const received_messages = ref<{ time: string; payload: string }[]>([])
+const show_messages = ref(true)
 const is_connected = ref(false)
 
 onMounted(() => {
@@ -18,16 +18,12 @@ onMounted(() => {
     }
 
     $mqtt.on("message", (topic, msg) => {
-        received_messages.value.unshift(`${topic}: ${msg.toString()}`)
+        received_messages.value.push({
+            time: new Date().toLocaleTimeString(),
+            payload: msg.toString(),
+        })
     })
 });
-
-// const publishMessage = () => {
-//     if ($mqtt && message.value.trim()) {
-//         $mqtt.publish(topic.value, message.value);
-//         message.value = "";
-//     }
-// };
 
 const connectChannel = () => {
     if (!$mqtt) {
@@ -108,7 +104,15 @@ watch(channel, (_, oldVal) => {
             <div v-show="show_messages" class="flex-1 overflow-y-auto bg-gray-800 rounded p-2 text-sm">
                 <p v-if="!received_messages.length" class="text-gray-400">No messages received</p>
                 <ul>
-                    <li v-for="msg in received_messages" :key="msg" class="mb-1">{{ msg }}</li>
+                    <li v-for="(msg, index) in [...received_messages].reverse()" :key="index"
+                        class="mb-1 px-3 py-2 rounded bg-gray-700 hover:bg-gray-600 text-gray-100 transition-colors duration-150">
+                        <div class="text-xs text-gray-400 mb-0.5">
+                            {{ msg.time }}
+                        </div>
+                        <div class="text-sm text-white font-mono break-words">
+                            {{ msg.payload }}
+                        </div>
+                    </li>
                 </ul>
                 <button @click.stop="clearMessages" class="text-right text-sm text-blue-400 mt-2">Clear</button>
             </div>

@@ -1,5 +1,7 @@
 <script setup>
 import { onMounted, onBeforeUnmount, ref } from 'vue';
+import { useChannel } from '~/composables/useChannel';
+import { isSidebarCollapsed } from '~/composables/useLayoutState';
 
 import * as Blockly from "blockly/core";
 import * as En from "blockly/msg/en";
@@ -11,13 +13,16 @@ import customCategory from '~/blockly/custom-category'
 import xmlToolbox from '~/blockly/gogo-toolbox'
 
 const { $mqtt } = useNuxtApp(); // Get Blockly & MQTT from Nuxt plugin
-const blocklyCommandTopic = ref("gogo-pgc/blockly/command")
-const remoteCommandTopic = ref("gogo-pgc/remote/command")
+const { channel } = useChannel()
+const blocklyCommandTopic = ref("gogo-pgc/blockly/")
+const remoteCommandTopic = ref("gogo-pgc/remote/")
 let onMessageHandler; // Store the event handler reference
 
-const blocklyDiv = ref(null);
+const isPlaying = ref(false);
+const isRecording = ref(false);
+
 const generatedCode = ref('');
-let workspace = null;
+let workspace = Blockly.WorkspaceSvg;
 let gogoGenerator = null;
 
 let lastActiveBlock = null; // Track the last block used (from MQTT or user)
@@ -38,11 +43,19 @@ onMounted(() => {
                     'colourPrimary': '#2965CC',
                     'colourSecondary': '#66A3FF',
                     'colourTertiary': '#1A3F7A',
-                }
+                },
+                'time_blocks': {
+                    'colourPrimary': '#F4A261',
+                    'colourSecondary': '#FFE0B2',
+                    'colourTertiary': '#E76F51',
+                },
             },
             categoryStyles: {
                 'movement_category': {
                     'colour': '#2965CC'
+                },
+                'time_category': {
+                    'colour': '#F4A261'
                 }
             },
             componentStyles: {
@@ -52,6 +65,7 @@ onMounted(() => {
                 flyoutBackgroundColour: '#ffffff',
                 flyoutOpacity: 1,
                 scrollbarColour: '#cccccc',
+                scrollbarOpacity: 0.8,
             },
         }),
         theme: 'modern',
@@ -82,6 +96,7 @@ onMounted(() => {
         }
 
         generatedCode.value = gogoGenerator.workspaceToCode(workspace).trim();
+        console.log(`👀 Generated code\n\n${generatedCode.value}`);
     });
 
     window.addEventListener('resize', () => Blockly.svgResize(workspace));
@@ -93,13 +108,15 @@ onMounted(() => {
 
     // Define the MQTT message handler
     onMessageHandler = (topic, message) => {
-        if (topic != remoteCommandTopic.value) return;
+        let checkingTopic = remoteCommandTopic.value + channel.value
+        if (topic != checkingTopic) return;
 
         const command = message.toString().trim(); // Convert to string and trim
         console.log(`📩 On topic: ${topic} received: ${message.toString()}`);
 
         // Check if the message is a known Blockly block command
-        createBlockFromCommand(command);
+        if (isRecording.value)
+            createBlockFromCommand(command);
     };
 
     // Attach the event listener
@@ -112,21 +129,63 @@ onBeforeUnmount(() => {
     }
 });
 
+watch(isSidebarCollapsed, () => {
+    setTimeout(() => {
+        Blockly.svgResize(workspace);
+    }, 250);
+});
+
 const createBlockFromCommand = (command) => {
+    // split command into parts - first word is the command, rest are arguments
+    const commandParts = command.trim().split(' ')
+    const commandName = commandParts[0]
+    const commandArgs = commandParts.slice(1)
+
     const blockMapping = {
         forward: "movement_forward",
         backward: "movement_backward",
         left: "movement_left",
         right: "movement_right",
+        wait: "time_wait_ms",
+    };
+    const getInputNameForBlockType = (blockType) => {
+        switch (blockType) {
+            case "movement_forward":
+            case "movement_backward":
+            case "movement_left":
+            case "movement_right":
+                return "STEPS";
+            case "time_wait_ms":
+                return "TIME";
+            default:
+                return null;
+        }
     };
 
-    const blockType = blockMapping[command];
+    const blockType = blockMapping[commandName];
     if (!blockType) {
-        console.warn(`No matching block for command: ${command}`);
+        console.warn(`No matching block for command: ${commandName}`);
         return;
     }
 
     const newBlock = workspace.newBlock(blockType);
+
+    // Handle arguments if they exist, only handles number argument
+    if (commandArgs.length > 0 && !isNaN(parseFloat(commandArgs[0]))) {
+        const inputName = getInputNameForBlockType(blockType);
+        if (inputName && newBlock.getInput(inputName)) {
+            // Create a shadow math_number block
+            const shadowBlock = workspace.newBlock('math_number');
+            shadowBlock.setFieldValue(commandArgs[0], 'NUM');
+            shadowBlock.initSvg();
+
+            // Connect as shadow block
+            const connection = newBlock.getInput(inputName).connection;
+            connection.connect(shadowBlock.outputConnection);
+            shadowBlock.setShadow(true);
+        }
+    }
+
     newBlock.initSvg();
     newBlock.render();
 
@@ -139,67 +198,162 @@ const createBlockFromCommand = (command) => {
     lastActiveBlock = newBlock;
 };
 
-const copyCode = () => {
-    navigator.clipboard.writeText(generatedCode.value);
+const clearBlocks = () => {
+    workspace.clear()
 };
 
-const publishToMQTT = () => {
-    if ($mqtt && generatedCode.value != "") {
-        // Split commands line by line
-        const commands = generatedCode.value.trim().split("\n");
-        const topic = blocklyCommandTopic.value
-
-        // Send each command separately
-        commands.forEach((command, index) => {
-            setTimeout(() => {
-                $mqtt.publish(topic, command);
-                console.log(`📩 On topic: ${topic} sent: ${command}`);
-            }, index * 500); // 500ms delay between commands
-        });
+const controlRecording = () => {
+    isRecording.value = !isRecording.value
+    if (isRecording.value) {
+        console.log("🟢 Recording started.");
+    } else {
+        console.log("🔴 Recording stopped.");
     }
+};
+
+const controlPlay = async () => {
+    if (!$mqtt || generatedCode.value.trim() === "") return;
+
+    if (channel.value === "") {
+        console.log("⚠️ Channel is empty.");
+        return;
+    };
+
+    isPlaying.value = true;
+
+    const commands = generatedCode.value.trim().split("\n");
+    const topic = blocklyCommandTopic.value + channel.value;
+
+    for (let i = 0; i < commands.length && isPlaying.value; i++) {
+        const command = commands[i].trim();
+
+        if (command.toLowerCase().startsWith("wait ")) {
+            const delay = parseInt(command.split(" ")[1]);
+            if (!isNaN(delay)) {
+                console.log(`⏳ Waiting ${delay}ms`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+            continue;
+        }
+
+        $mqtt.publish(topic, command);
+        console.log(`📩 [${topic}] sent: ${command}`);
+
+        await new Promise(resolve => setTimeout(resolve, 100)); // fallback delay
+    }
+
+    isPlaying.value = false;
+};
+
+const controlPlayFast = async () => {
+    if (!$mqtt || generatedCode.value.trim() === "") return;
+
+    if (channel.value === "") {
+        console.log("⚠️ Channel is empty.");
+        return;
+    };
+
+    isPlaying.value = true;
+
+    const commands = generatedCode.value.trim().split("\n");
+    const topic = blocklyCommandTopic.value + channel.value;
+
+    for (let i = 0; i < commands.length && isPlaying.value; i++) {
+        const command = commands[i].trim();
+
+        if (command.toLowerCase().startsWith("wait ")) {
+            const delay = parseInt(command.split(" ")[1]);
+            if (!isNaN(delay)) {
+                console.log(`⏭️  Skipping wait of ${delay}ms`);
+            }
+            continue;
+        }
+
+        $mqtt.publish(topic, command);
+        console.log(`📩 [${topic}] sent: ${command}`);
+
+        await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    isPlaying.value = false;
+};
+
+const controlStop = () => {
+    isPlaying.value = false;
+    console.log("🛑 Playback stopped.");
 };
 </script>
 
 <template>
-    <div class="p-6 h-screen bg-gray-100 flex flex-col">
-        <h1 class="text-2xl font-bold mb-4 text-center">GoGo Programming Continuum</h1>
+    <div class="h-screen bg-gray-100 flex flex-col">
+        <!-- Header -->
+        <header class="px-6 py-3 bg-white border-b border-gray-200 shadow-sm flex justify-between items-center">
+            <h1 class="text-2xl font-semibold text-gray-800">GoGo Programming Continuum</h1>
+            <button @click="clearBlocks"
+                class="text-gray-500 hover:text-gray-800 flex items-center gap-1 text-sm font-medium transition-colors duration-150">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                    stroke="currentColor" class="w-4 h-4">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                        d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                </svg>
+                Clear Blocks
+            </button>
+        </header>
 
-        <!-- Main Layout: Blockly Left, Code Right -->
-        <div class="flex flex-1 gap-4">
-            <!-- Blockly Workspace -->
-            <div class="flex-1 border rounded bg-white">
-                <div id="blocklyDiv" class="w-full h-full"></div>
-            </div>
-
-            <!-- Code & Publish Section -->
-            <div class="w-1/3 flex flex-col">
-                <!-- Generated Code Display (2/3 of height) -->
-                <div class="flex-1 p-4 bg-gray-900 text-white rounded-md">
-                    <h3 class="text-lg font-bold mb-2 flex justify-between items-center">
-                        Generated Code
-                        <button @click="copyCode" class="text-xs px-2 py-1 bg-blue-600 rounded">
-                            Copy
-                        </button>
-                    </h3>
-                    <p class="p-4 bg-gray-800 text-sm rounded font-mono whitespace-pre-wrap overflow-auto h-2/3">
-                        {{ generatedCode }}
-                    </p>
-                </div>
-
-                <!-- Publish Button (1/3 of height) -->
-                <div class="mt-4 flex justify-center">
-                    <button @click="publishToMQTT"
-                        class="px-6 py-3 bg-green-600 text-white font-bold rounded hover:bg-green-700">
-                        Publish to MQTT
-                    </button>
-                </div>
-            </div>
+        <!-- Blockly Workspace -->
+        <div class="flex-1 relative">
+            <div id="blocklyDiv" class="absolute inset-0"></div>
         </div>
 
+        <!-- Footer / Control Panel -->
+        <footer class="px-6 py-4 bg-white border-t border-gray-200 shadow-inner flex flex-col items-center gap-5">
+            <!-- Record Button -->
+            <button @click="controlRecording" :class="[
+                'w-full max-w-sm text-white py-2 rounded-md flex items-center justify-center gap-2 transition-colors duration-150',
+                isRecording ? 'bg-gray-600 hover:bg-gray-700' : 'bg-red-600 hover:bg-red-700'
+            ]">
+                <!-- Icon changes based on isRecording -->
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="white" viewBox="0 0 24 24">
+                    <circle v-if="!isRecording" cx="12" cy="12" r="10" />
+                    <rect v-else x="6" y="6" width="12" height="12" rx="2" />
+                </svg>
+
+                <span>{{ isRecording ? 'Stop Recording' : 'Record' }}</span>
+            </button>
+
+            <!-- Playback Buttons -->
+            <div class="flex space-x-8 text-gray-600 select-none">
+                <button @click="controlStop" class="hover:text-black transition-colors duration-150" aria-label="Stop">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
+                        <path fill-rule="evenodd"
+                            d="M4.5 7.5a3 3 0 0 1 3-3h9a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3h-9a3 3 0 0 1-3-3v-9Z"
+                            clip-rule="evenodd" />
+                    </svg>
+                </button>
+                <button @click="controlPlay" class="hover:text-black transition-colors duration-150" aria-label="Play">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" class="w-10 h-10">
+                        <path fill-rule="evenodd"
+                            d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm14.024-.983a1.125 1.125 0 0 1 0 1.966l-5.603 3.113A1.125 1.125 0 0 1 9 15.113V8.887c0-.857.921-1.4 1.671-.983l5.603 3.113Z"
+                            clip-rule="evenodd" />
+                    </svg>
+                </button>
+                <button @click="controlPlayFast" class="hover:text-black transition-colors duration-150"
+                    aria-label="Fast Forward">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
+                        <path
+                            d="M5.055 7.06C3.805 6.347 2.25 7.25 2.25 8.69v8.122c0 1.44 1.555 2.343 2.805 1.628L12 14.471v2.34c0 1.44 1.555 2.343 2.805 1.628l7.108-4.061c1.26-.72 1.26-2.536 0-3.256l-7.108-4.061C13.555 6.346 12 7.249 12 8.689v2.34L5.055 7.061Z" />
+                    </svg>
+                </button>
+            </div>
+        </footer>
     </div>
 </template>
 
 <style>
+.blocklyMainBackground {
+    stroke-width: 0;
+}
+
 .blocklyFlyout {
     overflow: hidden !important;
 }
