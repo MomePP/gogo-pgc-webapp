@@ -1,4 +1,6 @@
+import mathGenerator from './categories/math'
 import controlGenerator from './categories/control'
+import timeGenerator from './categories/time'
 
 export default function(Blockly: any) {
 
@@ -254,8 +256,10 @@ export default function(Blockly: any) {
         return commentCode + code + nextCode
     }
 
+    mathGenerator(gogoGenerator)
 
     controlGenerator(gogoGenerator)
+    timeGenerator(gogoGenerator)
 
     return gogoGenerator;
 }

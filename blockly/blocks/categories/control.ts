@@ -12,7 +12,7 @@ export default function(Blockly: any) {
     const blocks = Blockly.common.createBlockDefinitionsFromJsonArray([
         {
             type: 'movement_forward',
-            message0: 'Forward',
+            message0: 'forward',
             // args0: [{ type: 'input_value', name: 'STEPS', check: 'Number' }],
             previousStatement: true,
             nextStatement: true,
@@ -24,7 +24,7 @@ export default function(Blockly: any) {
         },
         {
             type: 'movement_backward',
-            message0: 'Backward',
+            message0: 'backward',
             // args0: [{ type: 'input_value', name: 'STEPS', check: 'Number' }],
             previousStatement: true,
             nextStatement: true,
@@ -36,7 +36,7 @@ export default function(Blockly: any) {
         },
         {
             type: 'movement_left',
-            message0: 'Turn left',
+            message0: 'turn left',
             // args0: [{ type: 'input_value', name: 'DEGREES', check: 'Number' }],
             previousStatement: true,
             nextStatement: true,
@@ -48,7 +48,7 @@ export default function(Blockly: any) {
         },
         {
             type: 'movement_right',
-            message0: 'Turn right',
+            message0: 'turn right',
             // args0: [{ type: 'input_value', name: 'DEGREES', check: 'Number' }],
             previousStatement: true,
             nextStatement: true,
