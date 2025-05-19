@@ -16,6 +16,20 @@ export default defineNuxtConfig({
   vite: {
     plugins: [tailwindcss()]
   },
+  vue: {
+    compilerOptions: {
+      isCustomElement: (tag: string) => [
+        'xml',
+        'category',
+        'block',
+        'value',
+        'field',
+        'shadow',
+        'mutation',
+        'sep',
+      ].includes(tag),
+    }
+  },
   // build: {
   //   transpile: [
   //     'blockly/core', // or just 'blockly' if you're using the full library
