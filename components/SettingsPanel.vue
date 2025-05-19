@@ -101,20 +101,26 @@ watch(channel, (_, oldVal) => {
         </div>
 
         <transition name="fade">
-            <div v-show="show_messages" class="flex-1 overflow-y-auto bg-gray-800 rounded p-2 text-sm">
-                <p v-if="!received_messages.length" class="text-gray-400">No messages received</p>
-                <ul>
-                    <li v-for="(msg, index) in [...received_messages].reverse()" :key="index"
-                        class="mb-1 px-3 py-2 rounded bg-gray-700 hover:bg-gray-600 text-gray-100 transition-colors duration-150">
-                        <div class="text-xs text-gray-400 mb-0.5">
-                            {{ msg.time }}
-                        </div>
-                        <div class="text-sm text-white font-mono break-words">
-                            {{ msg.payload }}
-                        </div>
-                    </li>
-                </ul>
-                <button @click.stop="clearMessages" class="text-right text-sm text-blue-400 mt-2">Clear</button>
+            <div v-show="show_messages" class="flex flex-col flex-1 bg-gray-800 rounded p-2 text-sm">
+                <div class="flex-1 overflow-y-auto min-h-0" style="max-height: calc(80vh - 10rem)">
+                    <p v-if="!received_messages.length" class="text-gray-400">No messages received</p>
+                    <ul>
+                        <li v-for="(msg, index) in [...received_messages].reverse()" :key="index"
+                            class="mb-1 px-3 py-2 rounded bg-gray-700 hover:bg-gray-600 text-gray-100 transition-colors duration-150">
+                            <div class="text-xs text-gray-400 mb-0.5">
+                                {{ msg.time }}
+                            </div>
+                            <div class="text-sm text-white font-mono break-words">
+                                {{ msg.payload }}
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+                <div class="flex justify-end">
+                    <button @click.stop="clearMessages" class="text-sm text-blue-400 mt-2 mr-2 hover:underline">
+                        Clear
+                    </button>
+                </div>
             </div>
         </transition>
     </div>
