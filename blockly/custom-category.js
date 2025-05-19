@@ -26,6 +26,7 @@ export default function(Blockly) {
          */
         addColourBorder_(colour) {
             this.rowDiv_.style.backgroundColor = colour;
+            this.rowDiv_.style.borderColor = colour;
         }
 
         /**
@@ -40,12 +41,14 @@ export default function(Blockly) {
             if (isSelected) {
                 // Change the background color of the div to white.
                 this.rowDiv_.style.backgroundColor = 'white';
+                this.rowDiv_.style.borderColor = this.colour_;
                 // Set the colour of the text to the colour of the category.
                 labelDom.style.color = this.colour_;
                 this.iconDom_.style.color = this.colour_;
             } else {
                 // Set the background back to the original colour.
                 this.rowDiv_.style.backgroundColor = this.colour_;
+                this.rowDiv_.style.borderColor = this.colour_;
                 // Set the text back to white.
                 labelDom.style.color = 'white';
                 this.iconDom_.style.color = 'white';
