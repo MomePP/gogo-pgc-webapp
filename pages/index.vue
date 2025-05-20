@@ -16,13 +16,12 @@ const toggleSidebar = () => {
       isSidebarCollapsed ? 'w-12' : 'min-w-[280px] w-1/5'
     ]">
       <!-- Collapse Toggle Button -->
-      <button @click="toggleSidebar" class="absolute top-4 right-2 bg-gray-800 hover:bg-gray-700 text-white rounded p-1"
+      <button @click="toggleSidebar" class="absolute top-4 right-3 bg-gray-800 hover:bg-gray-700 text-white rounded p-1"
         :title="isSidebarCollapsed ? 'Expand' : 'Collapse'">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"
           class="w-4 h-4">
-          <path stroke-linecap="round" stroke-linejoin="round" :d="isSidebarCollapsed
-            ? 'M15 19l-7-7 7-7'
-            : 'M9 5l7 7-7 7'" />
+          <path stroke-linecap="round" stroke-linejoin="round"
+            :d="isSidebarCollapsed ? 'M9 5l7 7-7 7' : 'M15 19l-7-7 7-7'" />
         </svg>
       </button>
 
@@ -44,7 +43,7 @@ const toggleSidebar = () => {
 <style scoped>
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.15s ease;
+  transition: opacity 0.3s ease;
 }
 
 .fade-enter-from,
