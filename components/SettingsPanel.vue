@@ -10,6 +10,7 @@ const { channel } = useChannel()
 const received_messages = ref<{ time: string; payload: string }[]>([])
 const show_messages = ref(true)
 const is_connected = ref(false)
+const show_mqtt_info = ref(false)
 
 onMounted(() => {
     if (!$mqtt) {
@@ -17,10 +18,10 @@ onMounted(() => {
         return
     }
 
-    $mqtt.on("message", (topic, msg) => {
+    $mqtt.on("message", (topic, message) => {
         received_messages.value.push({
             time: new Date().toLocaleTimeString(),
-            payload: msg.toString(),
+            payload: message.toString(),
         })
     })
 });
@@ -80,7 +81,8 @@ watch(channel, (_, oldVal) => {
 
         <div class="flex items-center justify-between mb-1">
             <label class="text-base font-medium">Receiving Channel</label>
-            <span class="text-sm text-blue-400 hover:text-blue-300 cursor-help" title="MQTT topic to listen on">ⓘ</span>
+            <span class="text-sm text-blue-400 hover:text-blue-300 cursor-help" @click="show_mqtt_info = true"
+                title="MQTT settings info">ⓘ</span>
         </div>
         <input v-model="channel" class="w-full mb-4 p-2 bg-gray-700 text-white rounded" />
 
@@ -120,6 +122,41 @@ watch(channel, (_, oldVal) => {
                     <button @click.stop="clearMessages" class="text-sm text-blue-400 mt-2 mr-2 hover:underline">
                         Clear
                     </button>
+                </div>
+            </div>
+        </transition>
+
+        <transition name="fade">
+            <div v-if="show_mqtt_info"
+                class="fixed inset-0 bg-black bg-opacity-50 z-100 flex items-center justify-center">
+                <div class="bg-gray-900 text-white p-6 rounded shadow-lg max-w-xl w-full relative">
+                    <h3 class="text-lg font-semibold mb-4">MQTT Receiving Channel</h3>
+                    <p class="text-sm text-gray-300 mb-4">
+                        The receiving channel determines which MQTT topic this app will subscribe to in order to receive
+                        incoming messages. Make sure the topic matches the one used by your publisher.
+                    </p>
+                    <div class="mb-4 bg-gray-800 p-4 rounded text-sm border border-gray-700">
+                        <h4 class="text-blue-400 font-semibold mb-2">Current MQTT Settings</h4>
+                        <ul class="list-disc list-inside space-y-1">
+                            <li><span class="text-gray-400">MQTT broker: </span>
+                                <span class="text-white">broker.emqx.io</span>
+                            </li>
+                            <li>
+                                <span class="text-gray-400">Record / Message logs topic: </span>
+                                <span class="text-white">gogo-pgc/remote/&lt;channel&gt;</span>
+                            </li>
+                            <li>
+                                <span class="text-gray-400">Playback topic: </span>
+                                <span class="text-white">gogo-pgc/blockly/&lt;channel&gt;</span>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="flex justify-end">
+                        <button @click="show_mqtt_info = false"
+                            class="px-4 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded">
+                            Close
+                        </button>
+                    </div>
                 </div>
             </div>
         </transition>
