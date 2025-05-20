@@ -25,6 +25,7 @@ const generatedCode = ref('');
 let workspace = Blockly.WorkspaceSvg;
 let gogoGenerator = null;
 
+let lastReceivedTime = 0;
 let lastActiveBlock = null; // Track the last block used (from MQTT or user)
 
 onMounted(() => {
@@ -76,9 +77,7 @@ onMounted(() => {
         theme: 'modern',
     });
 
-    let xmlWorkspace = Blockly.utils.xml.textToDom(`<xml><block type="main_start"></block></xml>`)
-    Blockly.Xml.domToWorkspace(xmlWorkspace, workspace)
-    workspace.scrollCenter()
+    initWorkspace()
 
     // Track user-added blocks
     workspace.addChangeListener((event) => {
@@ -131,11 +130,19 @@ onMounted(() => {
         if (topic != checkingTopic) return;
 
         const command = message.toString().trim(); // Convert to string and trim
-        console.log(`📩 On topic: ${topic} received: ${message.toString()}`);
+        const time = Date.now();
+        console.log(`📩 ${time} - On topic: ${topic} received: ${message.toString()}`);
 
         // Check if the message is a known Blockly block command
-        if (isRecording.value)
+        if (isRecording.value) {
+            if (lastReceivedTime) {
+                let diff = time - lastReceivedTime
+                createBlockFromCommand('wait ' + diff)
+            }
+            lastReceivedTime = time
+
             createBlockFromCommand(command);
+        }
     };
 
     // Attach the event listener
@@ -219,14 +226,24 @@ const createBlockFromCommand = (command) => {
     lastActiveBlock = newBlock;
 };
 
+const initWorkspace = () => {
+    let xmlWorkspace = Blockly.utils.xml.textToDom(`<xml><block type="main_start"></block></xml>`)
+    Blockly.Xml.domToWorkspace(xmlWorkspace, workspace)
+    workspace.scrollCenter()
+}
+
 const clearBlocks = () => {
     workspace.clear()
+    initWorkspace()
+
+    lastReceivedTime = 0
 };
 
 const controlRecording = () => {
     isRecording.value = !isRecording.value
     if (isRecording.value) {
         console.log("🟢 Recording started.");
+        lastReceivedTime = 0
     } else {
         console.log("🔴 Recording stopped.");
     }
