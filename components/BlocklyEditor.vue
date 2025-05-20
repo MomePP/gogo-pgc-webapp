@@ -165,15 +165,17 @@ const createBlockFromCommand = (command) => {
         backward: "movement_backward",
         left: "movement_left",
         right: "movement_right",
+        stop: "movement_stop",
         wait: "time_wait_ms",
     };
     const getInputNameForBlockType = (blockType) => {
         switch (blockType) {
             case "movement_forward":
             case "movement_backward":
+                return "STEPS";
             case "movement_left":
             case "movement_right":
-                return "STEPS";
+                return "DEGREES";
             case "time_wait_ms":
                 return "TIME";
             default:

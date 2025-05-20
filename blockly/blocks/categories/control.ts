@@ -1,4 +1,4 @@
-export default function(Blockly: any) {
+export default function (Blockly: any) {
     // Blockly.Color = Blockly.Color || {}
 
     // Blockly.Color.CONTROL = '#418bd2'
@@ -57,7 +57,19 @@ export default function(Blockly: any) {
             style: 'movement_blocks',
             tooltip: 'Turns right',
             helpUrl: ''
-        }
+        },
+        {
+            type: 'movement_stop',
+            message0: 'stop',
+            // args0: [{ type: 'input_value', name: 'STEPS', check: 'Number' }],
+            previousStatement: true,
+            nextStatement: true,
+            // colour: Blockly.Color.CONTROL,
+            // colour: CONTROL_COLOR,
+            style: 'movement_blocks',
+            tooltip: 'Stop move',
+            helpUrl: ''
+        },
     ])
 
     return blocks
