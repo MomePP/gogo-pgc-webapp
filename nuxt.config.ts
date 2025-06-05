@@ -30,6 +30,11 @@ export default defineNuxtConfig({
       ].includes(tag),
     }
   },
+  runtimeConfig: {
+    public: {
+      mqttBrokerUrl: process.env.MQTT_BROKER_URL || "",
+    }
+  },
   // build: {
   //   transpile: [
   //     'blockly/core', // or just 'blockly' if you're using the full library

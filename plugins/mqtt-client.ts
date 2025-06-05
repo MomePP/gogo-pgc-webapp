@@ -1,7 +1,7 @@
 import mqtt from "mqtt";
 
 export default defineNuxtPlugin(() => {
-    const brokerUrl = "wss://broker.emqx.io:8084/mqtt";
+    const brokerUrl = (useRuntimeConfig().public.mqttBrokerUrl as string) || "";
     const client = mqtt.connect(brokerUrl, {
         clean: true,
         connectTimeout: 4000,
