@@ -4,7 +4,7 @@ import { useChannel } from '~/composables/useChannel';
 
 const { $mqtt } = useNuxtApp()
 
-const topic = ref("gogo-pgc/remote/")
+const broadcastTopic = ref((useRuntimeConfig().public.broadcastTopic as string) || "");
 const { channel } = useChannel()
 
 const received_messages = ref<{ time: string; payload: string }[]>([])
@@ -19,10 +19,13 @@ onMounted(() => {
     }
 
     $mqtt.on("message", (topic, message) => {
-        received_messages.value.push({
-            time: new Date().toLocaleTimeString(),
-            payload: message.toString(),
-        })
+        if (topic.startsWith(broadcastTopic.value)) {
+            const command = topic.substring(topic.lastIndexOf('/') + 1)
+            received_messages.value.push({
+                time: new Date().toLocaleTimeString(),
+                payload: command,
+            })
+        }
     })
 });
 
@@ -37,14 +40,14 @@ const connectChannel = () => {
         return
     }
 
-    const newTopic = topic.value + channel.value;
+    const newTopic = broadcastTopic.value + channel.value + "/#";
 
     $mqtt.subscribe(newTopic, (err) => {
         if (err) {
             console.error("❌ Failed to subscribe to topic:", err)
             is_connected.value = false
         } else {
-            console.log("✅ Subscribed to topic:", newTopic)
+            console.log("✅ Subscribed to channel:", channel.value)
             is_connected.value = true
         }
     })
@@ -59,15 +62,15 @@ const toggleMessages = () => {
     show_messages.value = !show_messages.value
 };
 
-watch(channel, (_, oldVal) => {
-    if (is_connected.value && oldVal) {
-        const oldTopic = topic.value + oldVal
+watch(channel, (_, oldChannel) => {
+    if (is_connected.value && oldChannel) {
+        const oldTopic = broadcastTopic.value + oldChannel + '/#'
 
         $mqtt.unsubscribe(oldTopic, (err) => {
             if (err) {
                 console.warn("⚠️ Failed to unsubscribe from old topic:", err)
             } else {
-                console.log("🔌 Unsubscribed from:", oldTopic)
+                console.log("🔌 Unsubscribed from channel:", oldChannel)
             }
         })
     }

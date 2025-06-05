@@ -33,6 +33,8 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       mqttBrokerUrl: process.env.MQTT_BROKER_URL || "",
+      broadcastTopic: process.env.BROADCAST_TOPIC || "",
+      broadcastPassword: process.env.BROADCAST_PASSWORD || "",
     }
   },
   // build: {

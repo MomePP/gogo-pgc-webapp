@@ -14,8 +14,8 @@ import xmlToolbox from '~/blockly/gogo-toolbox'
 
 const { $mqtt } = useNuxtApp(); // Get Blockly & MQTT from Nuxt plugin
 const { channel } = useChannel()
-const blocklyCommandTopic = ref("gogo-pgc/blockly/")
-const remoteCommandTopic = ref("gogo-pgc/remote/")
+const broadcastTopic = ref(useRuntimeConfig().public.broadcastTopic || "");
+const broadcastPassword = ref(useRuntimeConfig().public.broadcastPassword || "");
 let onMessageHandler; // Store the event handler reference
 
 const isPlaying = ref(false);
@@ -114,7 +114,6 @@ onMounted(() => {
         }
 
         generatedCode.value = gogoGenerator.workspaceToCode(workspace).trim();
-        console.log(`👀 Generated code\n\n${generatedCode.value}`);
     });
 
     window.addEventListener('resize', () => Blockly.svgResize(workspace));
@@ -126,12 +125,13 @@ onMounted(() => {
 
     // Define the MQTT message handler
     onMessageHandler = (topic, message) => {
-        let checkingTopic = remoteCommandTopic.value + channel.value
-        if (topic != checkingTopic) return;
+        let checkingTopic = broadcastTopic.value + channel.value
+        if (!topic.startsWith(checkingTopic)) return;
 
-        const command = message.toString().trim(); // Convert to string and trim
+        // const command = message.toString().trim(); // Convert to string and trim
+        const command = topic.substring(topic.lastIndexOf('/') + 1)
         const time = Date.now();
-        console.log(`📩 ${time} - On topic: ${topic} received: ${message.toString()}`);
+        console.log(`📩 ${time} - On channel: ${channel.value} received: ${command}`);
 
         // Check if the message is a known Blockly block command
         if (isRecording.value) {
@@ -168,8 +168,8 @@ const createBlockFromCommand = (command) => {
     const commandArgs = commandParts.slice(1)
 
     const blockMapping = {
-        forward: "movement_forward",
-        backward: "movement_backward",
+        up: "movement_forward",
+        down: "movement_backward",
         left: "movement_left",
         right: "movement_right",
         stop: "movement_stop",
@@ -239,33 +239,24 @@ const clearBlocks = () => {
     lastReceivedTime = 0
 };
 
-const controlRecording = () => {
-    isRecording.value = !isRecording.value
-    if (isRecording.value) {
-        console.log("🟢 Recording started.");
-        lastReceivedTime = 0
-    } else {
-        console.log("🔴 Recording stopped.");
-    }
-};
-
-const controlPlay = async () => {
-    if (!$mqtt || generatedCode.value.trim() === "") return;
+const playCommands = async ({ fast }) => {
+    if (!$mqtt || generatedCode.value.trim() === "" || isPlaying.value) return;
 
     if (channel.value === "") {
         console.log("⚠️ Channel is empty.");
         return;
-    };
+    }
 
+    console.log(`👀 Generated code\n\n${generatedCode.value}`);
     isPlaying.value = true;
 
-    const allLines = generatedCode.value.trim().split("\n");
-    const topic = blocklyCommandTopic.value + channel.value;
+    const codeLines = generatedCode.value.trim().split("\n");
+    const topic = broadcastTopic.value + channel.value + "/";
 
     const commands = [];
     let inStartBlock = false;
 
-    for (const line of allLines) {
+    for (const line of codeLines) {
         const trimmed = line.trim().toLowerCase();
 
         if (trimmed === "start") {
@@ -275,7 +266,7 @@ const controlPlay = async () => {
 
         if (trimmed === "end") {
             inStartBlock = false;
-            break; // stop parsing after end
+            break;
         }
 
         if (inStartBlock) {
@@ -286,56 +277,42 @@ const controlPlay = async () => {
     for (let i = 0; i < commands.length && isPlaying.value; i++) {
         const command = commands[i];
 
-        if (command.toLowerCase().startsWith("wait ")) {
+        if (command.startsWith("wait ")) {
             const delay = parseInt(command.split(" ")[1]);
             if (!isNaN(delay)) {
-                console.log(`⏳ Waiting ${delay}ms`);
-                await new Promise(resolve => setTimeout(resolve, delay));
+                if (fast) {
+                    console.log(`⏭️  Skipping wait of ${delay}ms`);
+                } else {
+                    console.log(`⏳ Waiting ${delay}ms`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
             }
             continue;
         }
 
-        $mqtt.publish(topic, command);
-        console.log(`📩 [${topic}] sent: ${command}`);
+        const commandTopic = topic + command;
+        $mqtt.publish(commandTopic, broadcastPassword.value);
+        console.log(`📩 [${channel.value}] sent: ${command}`);
 
-        await new Promise(resolve => setTimeout(resolve, 100)); // fallback delay
+        await new Promise(resolve => setTimeout(resolve, 200)); // fallback delay between commands
     }
 
     isPlaying.value = false;
 };
 
-const controlPlayFast = async () => {
-    if (!$mqtt || generatedCode.value.trim() === "") return;
-
-    if (channel.value === "") {
-        console.log("⚠️ Channel is empty.");
-        return;
-    };
-
-    isPlaying.value = true;
-
-    const commands = generatedCode.value.trim().split("\n");
-    const topic = blocklyCommandTopic.value + channel.value;
-
-    for (let i = 0; i < commands.length && isPlaying.value; i++) {
-        const command = commands[i].trim();
-
-        if (command.toLowerCase().startsWith("wait ")) {
-            const delay = parseInt(command.split(" ")[1]);
-            if (!isNaN(delay)) {
-                console.log(`⏭️  Skipping wait of ${delay}ms`);
-            }
-            continue;
-        }
-
-        $mqtt.publish(topic, command);
-        console.log(`📩 [${topic}] sent: ${command}`);
-
-        await new Promise(resolve => setTimeout(resolve, 100));
+const controlRecording = () => {
+    isRecording.value = !isRecording.value
+    if (isRecording.value) {
+        console.log("🟢 Recording started.");
+        lastReceivedTime = 0
+    } else {
+        console.log("🔴 Recording stopped.");
     }
-
-    isPlaying.value = false;
 };
+
+const controlPlay = () => playCommands({ fast: false });
+
+const controlPlayFast = () => playCommands({ fast: true });
 
 const controlStop = () => {
     isPlaying.value = false;
