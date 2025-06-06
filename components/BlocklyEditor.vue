@@ -20,6 +20,8 @@ let onMessageHandler; // Store the event handler reference
 
 const isPlaying = ref(false);
 const isRecording = ref(false);
+const trackWait = ref(false);
+const fallbackWaitTime = ref(500);
 
 const generatedCode = ref('');
 let workspace = Blockly.WorkspaceSvg;
@@ -143,7 +145,7 @@ onMounted(() => {
 
         // Check if the message is a known Blockly block command
         if (isRecording.value) {
-            if (lastReceivedTime) {
+            if (lastReceivedTime && trackWait.value) {
                 let diff = time - lastReceivedTime
                 createBlockFromCommand('wait ' + diff)
             }
@@ -302,7 +304,7 @@ const playCommands = async ({ fast }) => {
         $mqtt.publish(commandTopic, broadcastPassword.value);
         console.log(`📩 [${channel.value}] sent: ${command}`);
 
-        await new Promise(resolve => setTimeout(resolve, 200)); // fallback delay between commands
+        await new Promise(resolve => setTimeout(resolve, fallbackWaitTime.value)); // fallback delay between commands
     }
 
     isPlaying.value = false;
@@ -326,6 +328,10 @@ const controlStop = () => {
     isPlaying.value = false;
     console.log("🛑 Playback stopped.");
 };
+
+const clampFallbackWait = () => {
+    if (fallbackWaitTime.value < 500) fallbackWaitTime.value = 500
+};
 </script>
 
 <template>
@@ -342,6 +348,36 @@ const controlStop = () => {
                 </svg>
                 Clear Blocks
             </button>
+
+            <!-- Playback Controls (Top-Right Floating) -->
+            <div class="absolute top-20 right-8 flex gap-4 bg-white rounded-full shadow-lg px-4 py-2 items-center z-10">
+                <!-- Stop -->
+                <button @click="controlStop" class="hover:text-black text-gray-500 transition-colors duration-150"
+                    aria-label="Stop" title="Stop Playback">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" class="w-8 h-8">
+                        <path fill-rule="evenodd"
+                            d="M4.5 7.5a3 3 0 0 1 3-3h9a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3h-9a3 3 0 0 1-3-3v-9Z"
+                            clip-rule="evenodd" />
+                    </svg>
+                </button>
+                <!-- Play -->
+                <button @click="controlPlay" class="hover:text-black text-gray-500 transition-colors duration-150"
+                    aria-label="Play" title="Play (Normal Speed)">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" class="w-10 h-10">
+                        <path fill-rule="evenodd"
+                            d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm14.024-.983a1.125 1.125 0 0 1 0 1.966l-5.603 3.113A1.125 1.125 0 0 1 9 15.113V8.887c0-.857.921-1.4 1.671-.983l5.603 3.113Z"
+                            clip-rule="evenodd" />
+                    </svg>
+                </button>
+                <!-- Fast Forward -->
+                <button @click="controlPlayFast" class="hover:text-black text-gray-500 transition-colors duration-150"
+                    aria-label="Fast Forward" title="Play (Fast Forward)">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" class="w-8 h-8">
+                        <path
+                            d="M5.055 7.06C3.805 6.347 2.25 7.25 2.25 8.69v8.122c0 1.44 1.555 2.343 2.805 1.628L12 14.471v2.34c0 1.44 1.555 2.343 2.805 1.628l7.108-4.061c1.26-.72 1.26-2.536 0-3.256l-7.108-4.061C13.555 6.346 12 7.249 12 8.689v2.34L5.055 7.061Z" />
+                    </svg>
+                </button>
+            </div>
         </header>
 
         <!-- Blockly Workspace -->
@@ -350,44 +386,40 @@ const controlStop = () => {
         </div>
 
         <!-- Footer / Control Panel -->
-        <footer class="px-6 py-4 bg-white border-t border-gray-200 shadow-inner flex flex-col items-center gap-5">
-            <!-- Record Button -->
-            <button @click="controlRecording" :class="[
-                'w-full max-w-sm text-white py-2 rounded-md flex items-center justify-center gap-2 transition-colors duration-150',
-                isRecording ? 'bg-gray-600 hover:bg-gray-700' : 'bg-red-600 hover:bg-red-700'
-            ]">
-                <!-- Icon changes based on isRecording -->
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="white" viewBox="0 0 24 24">
-                    <circle v-if="!isRecording" cx="12" cy="12" r="10" />
-                    <rect v-else x="6" y="6" width="12" height="12" rx="2" />
-                </svg>
-
-                <span>{{ isRecording ? 'Stop Recording' : 'Record' }}</span>
-            </button>
-
-            <!-- Playback Buttons -->
-            <div class="flex space-x-8 text-gray-600 select-none">
-                <button @click="controlStop" class="hover:text-black transition-colors duration-150" aria-label="Stop">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
-                        <path fill-rule="evenodd"
-                            d="M4.5 7.5a3 3 0 0 1 3-3h9a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3h-9a3 3 0 0 1-3-3v-9Z"
-                            clip-rule="evenodd" />
-                    </svg>
+        <footer class="w-full px-6 py-5 bg-white border-t border-gray-200 shadow-inner flex items-center relative">
+            <!-- Left: Capture wait time -->
+            <div class="flex items-center gap-2">
+                <span class="text-sm text-gray-700">Capture wait time</span>
+                <button @click="trackWait = !trackWait" type="button" :aria-pressed="trackWait"
+                    class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none"
+                    :class="trackWait ? 'bg-blue-600' : 'bg-gray-300'">
+                    <span
+                        class="inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200"
+                        :class="trackWait ? 'translate-x-5' : 'translate-x-1'" />
                 </button>
-                <button @click="controlPlay" class="hover:text-black transition-colors duration-150" aria-label="Play">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" class="w-10 h-10">
-                        <path fill-rule="evenodd"
-                            d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm14.024-.983a1.125 1.125 0 0 1 0 1.966l-5.603 3.113A1.125 1.125 0 0 1 9 15.113V8.887c0-.857.921-1.4 1.671-.983l5.603 3.113Z"
-                            clip-rule="evenodd" />
+                <span class="text-xs text-gray-500 font-mono w-8 text-center">{{ trackWait ? 'ON' : 'OFF' }}</span>
+            </div>
+            <!-- Center: Record Button -->
+            <div class="absolute left-1/2 transform -translate-x-1/2">
+                <button @click="controlRecording" :class="[
+                    'flex items-center gap-2 px-6 py-2 rounded-full font-semibold shadow transition-colors duration-150 focus:outline-none',
+                    isRecording ? 'bg-gray-700 text-white hover:bg-gray-800' : 'bg-red-600 text-white hover:bg-red-700'
+                ]">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="white" viewBox="0 0 24 24">
+                        <circle v-if="!isRecording" cx="12" cy="12" r="10" />
+                        <rect v-else x="6" y="6" width="12" height="12" rx="2" />
                     </svg>
+                    <span class="inline-block text-center w-24">
+                        {{ isRecording ? 'Stop Record' : 'Record' }}
+                    </span>
                 </button>
-                <button @click="controlPlayFast" class="hover:text-black transition-colors duration-150"
-                    aria-label="Fast Forward">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
-                        <path
-                            d="M5.055 7.06C3.805 6.347 2.25 7.25 2.25 8.69v8.122c0 1.44 1.555 2.343 2.805 1.628L12 14.471v2.34c0 1.44 1.555 2.343 2.805 1.628l7.108-4.061c1.26-.72 1.26-2.536 0-3.256l-7.108-4.061C13.555 6.346 12 7.249 12 8.689v2.34L5.055 7.061Z" />
-                    </svg>
-                </button>
+            </div>
+            <!-- Right: Fallback Wait Time Input -->
+            <div class="flex items-center gap-2 ml-auto">
+                <span class="text-sm text-gray-700">Default wait</span>
+                <input type="number" min=500 v-model.number="fallbackWaitTime" placeholder="ms" @blur="clampFallbackWait"
+                    class="w-22 px-3 py-2 rounded-full border border-gray-200 bg-gray-50 text-right text-sm shadow-sm focus:border-blue-400 focus:ring-2 focus:ring-blue-200 transition" />
+                <span class="text-xs text-gray-500 font-mono">ms</span>
             </div>
         </footer>
     </div>
