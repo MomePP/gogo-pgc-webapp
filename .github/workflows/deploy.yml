@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       MQTT_BROKER_URL: ${{ secrets.MQTT_BROKER_URL }}
+      BROADCAST_TOPIC: ${{ secrets.BROADCAST_TOPIC }}
+      BROADCAST_PASSWORD: ${{ secrets.BROADCAST_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
