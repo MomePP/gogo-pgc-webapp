@@ -36,6 +36,7 @@ onMounted(() => {
 
     workspace = Blockly.inject('blocklyDiv', {
         toolbox: xmlToolbox,
+        theme: 'modern',
         renderer: 'zelos',
         theme: Blockly.Theme.defineTheme('modern', {
             base: Blockly.Themes.Zelos,
@@ -74,7 +75,14 @@ onMounted(() => {
                 scrollbarOpacity: 0.8,
             },
         }),
-        theme: 'modern',
+        zoom: {
+            controls: true, // Enable zoom in/out buttons
+            wheel: true,    // Optional: enable mouse wheel zoom
+            startScale: 1,
+            maxScale: 2,
+            minScale: 0.3,
+            scaleSpeed: 1.2
+        }
     });
 
     initWorkspace()
