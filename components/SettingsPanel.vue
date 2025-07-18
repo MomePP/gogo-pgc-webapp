@@ -1,8 +1,10 @@
 <script setup lang='ts'>
 import { ref, onMounted } from 'vue';
+import type { WebHIDDevice } from '~/types/webhid';
 
 const { $mqtt } = useNuxtApp()
 const remoteTopic = ref(useRuntimeConfig().public.mqttRemoteTopic || "");
+const { connect, disconnect, isSupported } = useWebHID()
 
 const received_messages = ref<{ time: string; payload: string }[]>([])
 const show_messages = ref(true)
@@ -24,6 +26,25 @@ onMounted(() => {
     })
 });
 
+const handleConnect = async () => {
+    if (!isSupported()) {
+        console.error('WebHID not supported')
+        return
+    }
+
+    try {
+        await connect({
+            deviceFilters: [{ vendorId: 0x0461 }],
+            isPrompt: true,
+            connectHandler: (reporter: (data: Uint8Array) => Promise<void>) => console.log('Connected:', reporter),
+            disconnectHandler: (event: { device: WebHIDDevice }) => console.log('Disconnected:', event),
+            messageHandler: (data: Uint8Array) => console.log('Message:', data)
+        })
+    } catch (error) {
+        console.error('Connection failed:', error)
+    }
+}
+
 const clearMessages = () => {
     received_messages.value = []
 };
@@ -36,6 +57,13 @@ const toggleMessages = () => {
 <template>
     <div class="p-4 flex flex-col h-full">
         <h2 class="text-xl font-bold mb-6">Settings</h2>
+
+        <div class="flex items-center justify-between mb-1">
+            <label class="text-base font-medium">Program Setup</label>
+        </div>
+        <button @click="handleConnect" class='px-4 py-2 mb-4 rounded font-medium transition bg-green-600 text-white'>
+            {{ 'Download Program' }}
+        </button>
 
         <div class="flex items-center justify-between mb-2 cursor-pointer" @click="toggleMessages">
             <h3 class="text-base font-medium">Message monitor</h3>
