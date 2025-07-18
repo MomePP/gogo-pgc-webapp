@@ -1,8 +1,10 @@
 <script setup lang='ts'>
 import { ref, onMounted } from 'vue';
 import { useChannel } from '~/composables/useChannel';
+import type { WebHIDDevice } from '~/types/webhid';
 
 const { $mqtt } = useNuxtApp()
+const { connect, disconnect, isSupported } = useWebHID()
 
 const broadcastTopic = ref((useRuntimeConfig().public.broadcastTopic as string) || "");
 const { channel } = useChannel()
@@ -53,6 +55,25 @@ const connectChannel = () => {
     })
 };
 
+const handleConnect = async () => {
+    if (!isSupported()) {
+        console.error('WebHID not supported')
+        return
+    }
+
+    try {
+        await connect({
+            deviceFilters: [{ vendorId: 0x0461 }],
+            isPrompt: true,
+            connectHandler: (reporter: (data: Uint8Array) => Promise<void>) => console.log('Connected:', reporter),
+            disconnectHandler: (event: { device: WebHIDDevice }) => console.log('Disconnected:', event),
+            messageHandler: (data: Uint8Array) => console.log('Message:', data)
+        })
+    } catch (error) {
+        console.error('Connection failed:', error)
+    }
+}
+
 const clearMessages = () => {
     received_messages.value = []
 };
@@ -94,6 +115,13 @@ watch(channel, (_, oldChannel) => {
             is_connected ? 'bg-green-600 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'
         ]">
             {{ is_connected ? '✅ Connected' : 'Connect' }}
+        </button>
+
+        <div class="flex items-center justify-between mb-1">
+            <label class="text-base font-medium">Program Setup</label>
+        </div>
+        <button @click="handleConnect" class='px-4 py-2 mb-4 rounded font-medium transition bg-green-600 text-white'>
+            {{ 'Download Program' }}
         </button>
 
         <div class="flex items-center justify-between mb-2 cursor-pointer" @click="toggleMessages">

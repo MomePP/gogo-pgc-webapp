@@ -37,6 +37,10 @@ export default defineNuxtConfig({
       broadcastPassword: process.env.BROADCAST_PASSWORD || "",
     }
   },
+  plugins: [
+    '~/plugins/mqtt-client',
+    '~/plugins/webhid-plugin',
+  ]
   // build: {
   //   transpile: [
   //     'blockly/core', // or just 'blockly' if you're using the full library
