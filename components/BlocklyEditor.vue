@@ -152,7 +152,6 @@ onMounted(() => {
     // Define the MQTT message handler
     onMessageHandler = (topic, message) => {
         let checkingTopic = remoteTopic.value + channel.value
-        console.log(checkingTopic, topic)
         if (!topic.startsWith(checkingTopic)) return;
 
         const time = Date.now();
