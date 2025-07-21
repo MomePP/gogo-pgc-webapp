@@ -35,6 +35,9 @@ export default defineNuxtConfig({
       mqttBrokerUrl: process.env.MQTT_BROKER_URL || "",
       broadcastTopic: process.env.BROADCAST_TOPIC || "",
       broadcastPassword: process.env.BROADCAST_PASSWORD || "",
+      mqttRemoteTopic: process.env.MQTT_REMOTE_TOPIC || "",
+      mqttBlocklyTopic: process.env.MQTT_BLOCKLY_TOPIC || "",
+      mqttControlTopic: process.env.MQTT_CONTROL_TOPIC || "",
     }
   },
   // build: {

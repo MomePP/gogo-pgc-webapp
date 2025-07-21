@@ -4,7 +4,7 @@ import { useChannel } from '~/composables/useChannel';
 
 const { $mqtt } = useNuxtApp()
 
-const broadcastTopic = ref((useRuntimeConfig().public.broadcastTopic as string) || "");
+const remoteTopic = ref(useRuntimeConfig().public.mqttRemoteTopic || "");
 const { channel } = useChannel()
 
 const received_messages = ref<{ time: string; payload: string }[]>([])
@@ -19,11 +19,10 @@ onMounted(() => {
     }
 
     $mqtt.on("message", (topic, message) => {
-        if (topic.startsWith(broadcastTopic.value)) {
-            const command = topic.substring(topic.lastIndexOf('/') + 1)
+        if (topic.startsWith(remoteTopic.value)) {
             received_messages.value.push({
                 time: new Date().toLocaleTimeString(),
-                payload: command,
+                payload: message.toString(),
             })
         }
     })
@@ -40,7 +39,7 @@ const connectChannel = () => {
         return
     }
 
-    const newTopic = broadcastTopic.value + channel.value + "/#";
+    const newTopic = remoteTopic.value + channel.value + "/#";
 
     $mqtt.subscribe(newTopic, (err) => {
         if (err) {
@@ -64,7 +63,7 @@ const toggleMessages = () => {
 
 watch(channel, (_, oldChannel) => {
     if (is_connected.value && oldChannel) {
-        const oldTopic = broadcastTopic.value + oldChannel + '/#'
+        const oldTopic = remoteTopic.value + oldChannel + '/#'
 
         $mqtt.unsubscribe(oldTopic, (err) => {
             if (err) {
