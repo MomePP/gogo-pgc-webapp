@@ -10,6 +10,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       MQTT_BROKER_URL: ${{ secrets.MQTT_BROKER_URL }}
+      MQTT_REMOTE_TOPIC: ${{ secrets.MQTT_REMOTE_TOPIC }}
+      MQTT_BLOCKLY_TOPIC: ${{ secrets.MQTT_BLOCKLY_TOPIC }}
+      MQTT_CONTROL_TOPIC: ${{ secrets.MQTT_CONTROL_TOPIC }}
       BROADCAST_TOPIC: ${{ secrets.BROADCAST_TOPIC }}
       BROADCAST_PASSWORD: ${{ secrets.BROADCAST_PASSWORD }}
     steps:
