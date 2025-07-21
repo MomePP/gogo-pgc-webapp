@@ -14,12 +14,11 @@ import xmlToolbox from '~/blockly/gogo-toolbox'
 
 const { $mqtt } = useNuxtApp(); // Get Blockly & MQTT from Nuxt plugin
 const { channel } = useChannel()
-const broadcastTopic = ref(useRuntimeConfig().public.broadcastTopic || "");
-const broadcastPassword = ref(useRuntimeConfig().public.broadcastPassword || "");
+const remoteTopic = ref(useRuntimeConfig().public.mqttRemoteTopic || "");
+const blocklyTopic = ref(useRuntimeConfig().public.mqttBlocklyTopic || "");
+const controlTopic = ref(useRuntimeConfig().public.mqttControlTopic || "");
 let onMessageHandler; // Store the event handler reference
 
-const isPlaying = ref(false);
-const isRecording = ref(false);
 const trackWait = ref(false);
 const fallbackWaitTime = ref(500);
 
@@ -29,6 +28,23 @@ let gogoGenerator = null;
 
 let lastReceivedTime = 0;
 let lastActiveBlock = null; // Track the last block used (from MQTT or user)
+
+class BiMap {
+    constructor(entries) {
+        this.forward = new Map(entries);
+        this.reverse = new Map(entries.map(([k, v]) => [v, k]));
+    }
+    get(key) { return this.forward.get(key); }
+    getReverse(value) { return this.reverse.get(value); }
+}
+
+const commandMapping = new BiMap([
+    ['F', 'up'],
+    ['B', 'down'],
+    ['L', 'left'],
+    ['R', 'right'],
+    ['S', 'stop']
+]);
 
 onMounted(() => {
     customCategory(Blockly)
@@ -135,22 +151,18 @@ onMounted(() => {
 
     // Define the MQTT message handler
     onMessageHandler = (topic, message) => {
-        let checkingTopic = broadcastTopic.value + channel.value
+        let checkingTopic = remoteTopic.value + channel.value
+        console.log(checkingTopic, topic)
         if (!topic.startsWith(checkingTopic)) return;
 
-        // const command = message.toString().trim(); // Convert to string and trim
-        const command = topic.substring(topic.lastIndexOf('/') + 1)
         const time = Date.now();
-        console.log(`📩 ${time} - On channel: ${channel.value} received: ${command}`);
+        const commandPacket = message.toString().trim(); // Convert to string and trim
+        console.log(`📩 ${time} - On channel: ${channel.value} received: ${commandPacket}`);
 
-        // Check if the message is a known Blockly block command
-        if (isRecording.value) {
-            if (lastReceivedTime && trackWait.value) {
-                let diff = time - lastReceivedTime
-                createBlockFromCommand('wait ' + diff)
-            }
-            lastReceivedTime = time
 
+        // INFO: clear lastActiveBlock to disconnected the code block of different command group
+        lastActiveBlock = null
+        for (const command of resolveCommandPacket(commandPacket)) {
             createBlockFromCommand(command);
         }
     };
@@ -170,6 +182,14 @@ watch(isSidebarCollapsed, () => {
         Blockly.svgResize(workspace);
     }, 250);
 });
+
+const resolveCommandPacket = (packet) => {
+    return Array.from(packet).map(command => commandMapping.get(command))
+};
+
+const constructCommandPacket = (commands) => {
+    return commands.map(command => commandMapping.getReverse(command)).join('');
+};
 
 const createBlockFromCommand = (command) => {
     // split command into parts - first word is the command, rest are arguments
@@ -249,20 +269,16 @@ const clearBlocks = () => {
     lastReceivedTime = 0
 };
 
-const playCommands = async ({ fast }) => {
-    if (!$mqtt || generatedCode.value.trim() === "" || isPlaying.value) return;
+const controlDownload = () => {
+    if (!$mqtt) return;
 
     if (channel.value === "") {
         console.log("⚠️ Channel is empty.");
         return;
     }
-
-    console.log(`👀 Generated code\n\n${generatedCode.value}`);
-    isPlaying.value = true;
+    // console.log(`👀 Generated code\n\n${generatedCode.value}`);
 
     const codeLines = generatedCode.value.trim().split("\n");
-    const topic = broadcastTopic.value + channel.value + "/";
-
     const commands = [];
     let inStartBlock = false;
 
@@ -283,50 +299,23 @@ const playCommands = async ({ fast }) => {
             commands.push(line.trim());
         }
     }
-
-    for (let i = 0; i < commands.length && isPlaying.value; i++) {
-        const command = commands[i];
-
-        if (command.startsWith("wait ")) {
-            const delay = parseInt(command.split(" ")[1]);
-            if (!isNaN(delay)) {
-                if (fast) {
-                    console.log(`⏭️  Skipping wait of ${delay}ms`);
-                } else {
-                    console.log(`⏳ Waiting ${delay}ms`);
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                }
-            }
-            continue;
-        }
-
-        const commandTopic = topic + command;
-        $mqtt.publish(commandTopic, broadcastPassword.value);
-        console.log(`📩 [${channel.value}] sent: ${command}`);
-
-        await new Promise(resolve => setTimeout(resolve, fallbackWaitTime.value)); // fallback delay between commands
+    if (commands.length == 0) {
+        console.log("⚠️ Commands is empty.");
+        return;
     }
 
-    isPlaying.value = false;
+    const commandPacket = constructCommandPacket(commands)
+    // console.log(`👀 Generated packet\n\n${commandPacket}`);
+
+    const topic = blocklyTopic.value + channel.value;
+    $mqtt.publish(topic, commandPacket);
+    console.log(`📩 [${channel.value}] sent: ${commandPacket}`);
 };
 
-const controlRecording = () => {
-    isRecording.value = !isRecording.value
-    if (isRecording.value) {
-        console.log("🟢 Recording started.");
-        lastReceivedTime = 0
-    } else {
-        console.log("🔴 Recording stopped.");
-    }
-};
-
-const controlPlay = () => playCommands({ fast: false });
-
-const controlPlayFast = () => playCommands({ fast: true });
-
-const controlStop = () => {
-    isPlaying.value = false;
-    console.log("🛑 Playback stopped.");
+const controlRun = () => {
+    const topic = controlTopic.value + channel.value;
+    $mqtt.publish(topic, 'run');
+    console.log(`📩 [${channel.value}] sent: control run`);
 };
 
 const clampFallbackWait = () => {
@@ -339,43 +328,17 @@ const clampFallbackWait = () => {
         <!-- Header -->
         <header class="px-6 py-3 bg-white border-b border-gray-200 shadow-sm flex justify-between items-center">
             <h1 class="text-2xl font-semibold text-gray-800">GoGo Programming Continuum</h1>
-            <button @click="clearBlocks"
-                class="text-gray-500 hover:text-gray-800 flex items-center gap-1 text-sm font-medium transition-colors duration-150">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
-                    stroke="currentColor" class="w-4 h-4">
-                    <path stroke-linecap="round" stroke-linejoin="round"
-                        d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
-                </svg>
-                Clear Blocks
-            </button>
 
-            <!-- Playback Controls (Top-Right Floating) -->
             <div class="absolute top-20 right-8 flex gap-4 bg-white rounded-full shadow-lg px-4 py-2 items-center z-10">
-                <!-- Stop -->
-                <button @click="controlStop" class="hover:text-black text-gray-500 transition-colors duration-150"
-                    aria-label="Stop" title="Stop Playback">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" class="w-8 h-8">
-                        <path fill-rule="evenodd"
-                            d="M4.5 7.5a3 3 0 0 1 3-3h9a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3h-9a3 3 0 0 1-3-3v-9Z"
-                            clip-rule="evenodd" />
+                <button @click="clearBlocks"
+                    class="flex items-center gap-2 text-sm font-medium hover:text-gray-800 text-gray-500 transition-colors duration-150"
+                    aria-label="Stop" title="Clear Blocks">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                        stroke="currentColor" class="size-5">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="m20.25 7.5-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5m6 4.125 2.25 2.25m0 0 2.25 2.25M12 13.875l2.25-2.25M12 13.875l-2.25 2.25M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z" />
                     </svg>
-                </button>
-                <!-- Play -->
-                <button @click="controlPlay" class="hover:text-black text-gray-500 transition-colors duration-150"
-                    aria-label="Play" title="Play (Normal Speed)">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" class="w-10 h-10">
-                        <path fill-rule="evenodd"
-                            d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm14.024-.983a1.125 1.125 0 0 1 0 1.966l-5.603 3.113A1.125 1.125 0 0 1 9 15.113V8.887c0-.857.921-1.4 1.671-.983l5.603 3.113Z"
-                            clip-rule="evenodd" />
-                    </svg>
-                </button>
-                <!-- Fast Forward -->
-                <button @click="controlPlayFast" class="hover:text-black text-gray-500 transition-colors duration-150"
-                    aria-label="Fast Forward" title="Play (Fast Forward)">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" class="w-8 h-8">
-                        <path
-                            d="M5.055 7.06C3.805 6.347 2.25 7.25 2.25 8.69v8.122c0 1.44 1.555 2.343 2.805 1.628L12 14.471v2.34c0 1.44 1.555 2.343 2.805 1.628l7.108-4.061c1.26-.72 1.26-2.536 0-3.256l-7.108-4.061C13.555 6.346 12 7.249 12 8.689v2.34L5.055 7.061Z" />
-                    </svg>
+                    Clear Blocks
                 </button>
             </div>
         </header>
@@ -387,39 +350,58 @@ const clampFallbackWait = () => {
 
         <!-- Footer / Control Panel -->
         <footer class="w-full px-6 py-5 bg-white border-t border-gray-200 shadow-inner flex items-center relative">
-            <!-- Left: Capture wait time -->
-            <div class="flex items-center gap-2">
-                <span class="text-sm text-gray-700">Capture wait time</span>
-                <button @click="trackWait = !trackWait" type="button" :aria-pressed="trackWait"
-                    class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none"
-                    :class="trackWait ? 'bg-blue-600' : 'bg-gray-300'">
-                    <span
-                        class="inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200"
-                        :class="trackWait ? 'translate-x-5' : 'translate-x-1'" />
-                </button>
-                <span class="text-xs text-gray-500 font-mono w-8 text-center">{{ trackWait ? 'ON' : 'OFF' }}</span>
-            </div>
-            <!-- Center: Record Button -->
-            <div class="absolute left-1/2 transform -translate-x-1/2">
-                <button @click="controlRecording" :class="[
-                    'flex items-center gap-2 px-6 py-2 rounded-full font-semibold shadow transition-colors duration-150 focus:outline-none',
-                    isRecording ? 'bg-gray-700 text-white hover:bg-gray-800' : 'bg-red-600 text-white hover:bg-red-700'
-                ]">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="white" viewBox="0 0 24 24">
-                        <circle v-if="!isRecording" cx="12" cy="12" r="10" />
-                        <rect v-else x="6" y="6" width="12" height="12" rx="2" />
-                    </svg>
-                    <span class="inline-block text-center w-24">
-                        {{ isRecording ? 'Stop Record' : 'Record' }}
-                    </span>
-                </button>
-            </div>
-            <!-- Right: Fallback Wait Time Input -->
+            <!-- <div class="flex items-center gap-2"> -->
+            <!--     <span class="text-sm text-gray-700">Capture wait time</span> -->
+            <!--     <button @click="trackWait = !trackWait" type="button" :aria-pressed="trackWait" -->
+            <!--         class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none" -->
+            <!--         :class="trackWait ? 'bg-blue-600' : 'bg-gray-300'"> -->
+            <!--         <span -->
+            <!--             class="inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200" -->
+            <!--             :class="trackWait ? 'translate-x-5' : 'translate-x-1'" /> -->
+            <!--     </button> -->
+            <!--     <span class="text-xs text-gray-500 font-mono w-8 text-center">{{ trackWait ? 'ON' : 'OFF' }}</span> -->
+            <!-- </div> -->
+
+            <!-- <div class="absolute left-1/2 transform -translate-x-1/2"> -->
+            <!--     <button @click="controlRecording" :class="[ -->
+            <!--         'flex items-center gap-2 px-6 py-2 rounded-full font-semibold shadow transition-colors duration-150 focus:outline-none', -->
+            <!--         isRecording ? 'bg-gray-700 text-white hover:bg-gray-800' : 'bg-red-600 text-white hover:bg-red-700' -->
+            <!--     ]"> -->
+            <!--         <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="white" viewBox="0 0 24 24"> -->
+            <!--             <circle v-if="!isRecording" cx="12" cy="12" r="10" /> -->
+            <!--             <rect v-else x="6" y="6" width="12" height="12" rx="2" /> -->
+            <!--         </svg> -->
+            <!--         <span class="inline-block text-center w-24"> -->
+            <!--             {{ isRecording ? 'Stop Record' : 'Record' }} -->
+            <!--         </span> -->
+            <!--     </button> -->
+            <!-- </div> -->
+
+            <!-- <div class="flex items-center gap-2 ml-auto"> -->
+            <!--     <span class="text-sm text-gray-700">Default wait</span> -->
+            <!--     <input type="number" min=500 v-model.number="fallbackWaitTime" placeholder="ms" -->
+            <!--         @blur="clampFallbackWait" -->
+            <!--         class="w-22 px-3 py-2 rounded-full border border-gray-200 bg-gray-50 text-right text-sm shadow-sm focus:border-blue-400 focus:ring-2 focus:ring-blue-200 transition" /> -->
+            <!--     <span class="text-xs text-gray-500 font-mono">ms</span> -->
+            <!-- </div> -->
             <div class="flex items-center gap-2 ml-auto">
-                <span class="text-sm text-gray-700">Default wait</span>
-                <input type="number" min=500 v-model.number="fallbackWaitTime" placeholder="ms" @blur="clampFallbackWait"
-                    class="w-22 px-3 py-2 rounded-full border border-gray-200 bg-gray-50 text-right text-sm shadow-sm focus:border-blue-400 focus:ring-2 focus:ring-blue-200 transition" />
-                <span class="text-xs text-gray-500 font-mono">ms</span>
+                <button @click="controlRun"
+                    class='flex items-center size-12 justify-center rounded-full transition bg-green-400 hover:bg-green-600'>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="white" viewBox="0 0 24 24" stroke-width="2"
+                        stroke="white" class="size-6">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" />
+                    </svg>
+                </button>
+                <button @click="controlDownload"
+                    class='flex items-center gap-3 px-6 py-3 text-lg rounded-full font-medium transition bg-red-600 text-white hover:bg-red-700'>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                        stroke="currentColor" class="size-6">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                    </svg>
+                    {{ 'Download' }}
+                </button>
             </div>
         </footer>
     </div>
