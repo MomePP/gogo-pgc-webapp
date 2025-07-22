@@ -1,15 +1,11 @@
 <script setup lang='ts'>
 import { ref, onMounted } from 'vue';
-import { useChannel } from '~/composables/useChannel';
 
 const { $mqtt } = useNuxtApp()
-
 const remoteTopic = ref(useRuntimeConfig().public.mqttRemoteTopic || "");
-const { channel } = useChannel()
 
 const received_messages = ref<{ time: string; payload: string }[]>([])
 const show_messages = ref(true)
-const is_connected = ref(false)
 const show_mqtt_info = ref(false)
 
 onMounted(() => {
@@ -28,75 +24,21 @@ onMounted(() => {
     })
 });
 
-const connectChannel = () => {
-    if (!$mqtt) {
-        console.error("❌ MQTT client is not available!")
-        return
-    }
-
-    if (!channel.value) {
-        console.warn("⚠️ Channel is empty.")
-        return
-    }
-
-    const newTopic = remoteTopic.value + channel.value + "/#";
-
-    $mqtt.subscribe(newTopic, (err) => {
-        if (err) {
-            console.error("❌ Failed to subscribe to topic:", err)
-            is_connected.value = false
-        } else {
-            console.log("✅ Subscribed to channel:", channel.value)
-            is_connected.value = true
-        }
-    })
-};
-
 const clearMessages = () => {
     received_messages.value = []
 };
 
-
 const toggleMessages = () => {
     show_messages.value = !show_messages.value
 };
-
-watch(channel, (_, oldChannel) => {
-    if (is_connected.value && oldChannel) {
-        const oldTopic = remoteTopic.value + oldChannel + '/#'
-
-        $mqtt.unsubscribe(oldTopic, (err) => {
-            if (err) {
-                console.warn("⚠️ Failed to unsubscribe from old topic:", err)
-            } else {
-                console.log("🔌 Unsubscribed from channel:", oldChannel)
-            }
-        })
-    }
-    is_connected.value = false
-})
 </script>
 
 <template>
     <div class="p-4 flex flex-col h-full">
-        <h2 class="text-xl font-bold mb-4">Settings</h2>
-
-        <div class="flex items-center justify-between mb-1">
-            <label class="text-base font-medium">Receiving Channel</label>
-            <span class="text-sm text-blue-400 hover:text-blue-300 cursor-help" @click="show_mqtt_info = true"
-                title="MQTT settings info">ⓘ</span>
-        </div>
-        <input v-model="channel" class="w-full mb-4 p-2 bg-gray-700 text-white rounded" />
-
-        <button @click="connectChannel" :disabled="is_connected" :class="[
-            'px-4 py-2 mb-4 rounded font-medium transition',
-            is_connected ? 'bg-green-600 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'
-        ]">
-            {{ is_connected ? '✅ Connected' : 'Connect' }}
-        </button>
+        <h2 class="text-xl font-bold mb-6">Settings</h2>
 
         <div class="flex items-center justify-between mb-2 cursor-pointer" @click="toggleMessages">
-            <h3 class="text-base font-medium">Received Messages</h3>
+            <h3 class="text-base font-medium">Message monitor</h3>
             <svg :class="['w-5 h-5 transition-transform', show_messages ? 'rotate-180' : 'rotate-0']" fill="none"
                 stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round"
                 stroke-linejoin="round">
@@ -128,11 +70,18 @@ watch(channel, (_, oldChannel) => {
             </div>
         </transition>
 
+        <div class="mt-4">
+            <button @click="show_mqtt_info = true" 
+                class="text-sm text-blue-400 hover:text-blue-300 underline">
+                View MQTT Settings Info
+            </button>
+        </div>
+
         <transition name="fade">
             <div v-if="show_mqtt_info"
                 class="fixed inset-0 bg-black bg-opacity-50 z-100 flex items-center justify-center">
                 <div class="bg-gray-900 text-white p-6 rounded shadow-lg max-w-xl w-full relative">
-                    <h3 class="text-lg font-semibold mb-4">MQTT Receiving Channel</h3>
+                    <h3 class="text-lg font-semibold mb-4">MQTT Settings Information</h3>
                     <p class="text-sm text-gray-300 mb-4">
                         The receiving channel determines which MQTT topic this app will subscribe to in order to receive
                         incoming messages. Make sure the topic matches the one used by your publisher.
