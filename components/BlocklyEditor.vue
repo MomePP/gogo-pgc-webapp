@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, onBeforeUnmount, ref } from 'vue';
-import { useChannel } from '~/composables/useChannel';
+import { useMqttConnection } from '~/composables/useMqttConnection';
 import { isSidebarCollapsed } from '~/composables/useLayoutState';
 
 import * as Blockly from "blockly/core";
@@ -13,11 +13,10 @@ import customCategory from '~/blockly/custom-category'
 import xmlToolbox from '~/blockly/gogo-toolbox'
 
 const { $mqtt } = useNuxtApp(); // Get Blockly & MQTT from Nuxt plugin
-const { channel } = useChannel()
+const { channel, is_connected, connectChannel } = useMqttConnection()
 const remoteTopic = ref(useRuntimeConfig().public.mqttRemoteTopic || "");
 const blocklyTopic = ref(useRuntimeConfig().public.mqttBlocklyTopic || "");
 const controlTopic = ref(useRuntimeConfig().public.mqttControlTopic || "");
-const is_connected = ref(false)
 let onMessageHandler; // Store the event handler reference
 
 const generatedCode = ref('');
@@ -52,7 +51,6 @@ onMounted(() => {
 
     workspace = Blockly.inject('blocklyDiv', {
         toolbox: xmlToolbox,
-        theme: 'modern',
         renderer: 'zelos',
         theme: Blockly.Theme.defineTheme('modern', {
             base: Blockly.Themes.Zelos,
@@ -186,45 +184,6 @@ watch(isSidebarCollapsed, () => {
         Blockly.svgResize(workspace);
     }, 250);
 });
-
-watch(channel, (_, oldChannel) => {
-    if (is_connected.value && oldChannel) {
-        const oldTopic = remoteTopic.value + oldChannel + '/#'
-
-        $mqtt.unsubscribe(oldTopic, (err) => {
-            if (err) {
-                console.warn("⚠️ Failed to unsubscribe from old topic:", err)
-            } else {
-                console.log("🔌 Unsubscribed from channel:", oldChannel)
-            }
-        })
-    }
-    is_connected.value = false
-});
-
-const connectChannel = () => {
-    if (!$mqtt) {
-        console.error("❌ MQTT client is not available!")
-        return
-    }
-
-    if (!channel.value) {
-        console.warn("⚠️ Channel is empty.")
-        return
-    }
-
-    const newTopic = remoteTopic.value + channel.value + "/#";
-
-    $mqtt.subscribe(newTopic, (err) => {
-        if (err) {
-            console.error("❌ Failed to subscribe to topic:", err)
-            is_connected.value = false
-        } else {
-            console.log("✅ Subscribed to channel:", channel.value)
-            is_connected.value = true
-        }
-    })
-};
 
 const resolveCommandPacket = (packet) => {
     return Array.from(packet).map(command => commandMapping.get(command))

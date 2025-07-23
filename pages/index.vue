@@ -13,7 +13,7 @@ const toggleSidebar = () => {
     <!-- Left Sidebar (Settings Panel) -->
     <div :class="[
       'flex flex-col bg-gray-900 text-white transition-all duration-300 ease-in-out relative overflow-hidden',
-      isSidebarCollapsed ? 'w-12' : 'min-w-[280px] w-1/5'
+      isSidebarCollapsed ? 'w-12' : 'min-w-[340px] w-1/5'
     ]">
       <!-- Collapse Toggle Button -->
       <button @click="toggleSidebar" class="absolute top-4 right-3 bg-gray-800 hover:bg-gray-700 text-white rounded p-1"
