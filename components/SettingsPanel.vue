@@ -1,14 +1,22 @@
 <script setup lang='ts'>
 import { ref, onMounted } from 'vue';
+import { useMqttConnection } from '~/composables/useMqttConnection';
 import type { WebHIDDevice } from '~/types/webhid';
 
 const { $mqtt } = useNuxtApp()
-const remoteTopic = ref(useRuntimeConfig().public.mqttRemoteTopic || "");
+const { channel, is_connected } = useMqttConnection()
+const remoteTopic = ref(useRuntimeConfig().public.mqttRemoteTopic || "")
 const { connect, disconnect, isSupported } = useWebHID()
 
 const received_messages = ref<{ time: string; payload: string }[]>([])
 const show_messages = ref(true)
 const show_mqtt_info = ref(false)
+
+const programConfig = ref({
+    playbackWait: 500, // milliseconds
+    turnWait: 200,    // milliseconds  
+    moveWait: 300     // milliseconds
+})
 
 onMounted(() => {
     if (!$mqtt) {
@@ -26,6 +34,16 @@ onMounted(() => {
     })
 });
 
+const generateProgramTemplate = () => {
+    return {
+        channel: channel.value,
+        playbackWait: programConfig.value.playbackWait,
+        turnWait: programConfig.value.turnWait,
+        moveWait: programConfig.value.moveWait,
+        timestamp: new Date().toISOString()
+    }
+}
+
 const handleConnect = async () => {
     if (!isSupported()) {
         console.error('WebHID not supported')
@@ -33,10 +51,16 @@ const handleConnect = async () => {
     }
 
     try {
+        // Generate program template with current settings
+        const programTemplate = generateProgramTemplate()
+
         await connect({
             deviceFilters: [{ vendorId: 0x0461 }],
             isPrompt: true,
-            connectHandler: (reporter: (data: Uint8Array) => Promise<void>) => console.log('Connected:', reporter),
+            connectHandler: (reporter: (data: Uint8Array) => Promise<void>) => {
+                console.log('Connected:', reporter)
+                console.log('Program config:', programTemplate)
+            },
             disconnectHandler: (event: { device: WebHIDDevice }) => console.log('Disconnected:', event),
             messageHandler: (data: Uint8Array) => console.log('Message:', data)
         })
@@ -52,57 +76,138 @@ const clearMessages = () => {
 const toggleMessages = () => {
     show_messages.value = !show_messages.value
 };
+
+const isValidNumber = (value: number, min = 0, max = 10000) => {
+    return !isNaN(value) && value >= min && value <= max
+}
 </script>
 
 <template>
-    <div class="p-4 flex flex-col h-full">
-        <h2 class="text-xl font-bold mb-6">Settings</h2>
+    <div class="p-4 flex flex-col" style="height: 100vh;">
+        <div class="flex-shrink-0">
+            <h2 class="text-xl font-bold mb-6">Settings</h2>
 
-        <div class="flex items-center justify-between mb-1">
-            <label class="text-base font-medium">Program Setup</label>
-        </div>
-        <button @click="handleConnect" class='px-4 py-2 mb-4 rounded font-medium transition bg-green-600 text-white'>
-            {{ 'Download Program' }}
-        </button>
-
-        <div class="flex items-center justify-between mb-2 cursor-pointer" @click="toggleMessages">
-            <h3 class="text-base font-medium">Message monitor</h3>
-            <svg :class="['w-5 h-5 transition-transform', show_messages ? 'rotate-180' : 'rotate-0']" fill="none"
-                stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round"
-                stroke-linejoin="round">
-                <path d="M6 9l6 6 6-6" />
-            </svg>
-        </div>
-
-        <transition name="fade">
-            <div v-show="show_messages" class="flex flex-col flex-1 bg-gray-800 rounded p-2 text-sm">
-                <div class="flex-1 overflow-y-auto min-h-0" style="max-height: calc(80vh - 10rem)">
-                    <p v-if="!received_messages.length" class="text-gray-400">No messages received</p>
-                    <ul>
-                        <li v-for="(msg, index) in [...received_messages].reverse()" :key="index"
-                            class="mb-1 px-3 py-2 rounded bg-gray-700 hover:bg-gray-600 text-gray-100 transition-colors duration-150">
-                            <div class="text-xs text-gray-400 mb-0.5">
-                                {{ msg.time }}
-                            </div>
-                            <div class="text-sm text-white font-mono break-words">
-                                {{ msg.payload }}
-                            </div>
-                        </li>
-                    </ul>
+            <div class="flex items-center justify-between mb-1">
+                <label class="text-base font-medium">Template Program Setup</label>
+            </div>
+            <!-- Configuration Form -->
+            <div class="bg-gray-50 rounded-lg p-4 mb-4 space-y-4">
+                <!-- Channel Input -->
+                <div class="flex flex-col">
+                    <label class="text-sm font-medium text-gray-700 mb-1">Channel</label>
+                    <input v-model.number="channel" type="number" placeholder="Enter channel number"
+                        class="px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        :class="{ 'border-red-300 focus:ring-red-500': !channel }" />
+                    <span v-if="!channel" class="text-xs text-red-500 mt-1">Channel is required</span>
                 </div>
-                <div class="flex justify-end">
-                    <button @click.stop="clearMessages" class="text-sm text-blue-400 mt-2 mr-2 hover:underline">
-                        Clear
-                    </button>
+
+                <!-- Playback Wait -->
+                <div class="flex flex-col">
+                    <label class="text-sm font-medium text-gray-700 mb-1">
+                        Playback Wait
+                        <span class="text-gray-500 font-normal">(ms)</span>
+                    </label>
+                    <input v-model.number="programConfig.playbackWait" type="number" min="0" max="10000"
+                        placeholder="500"
+                        class="px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        :class="{ 'border-red-300 focus:ring-red-500': !isValidNumber(programConfig.playbackWait) }" />
+                    <span class="text-xs text-gray-500 mt-1">Wait time between commands during playback</span>
+                </div>
+
+                <!-- Turn Wait -->
+                <div class="flex flex-col">
+                    <label class="text-sm font-medium text-gray-700 mb-1">
+                        Turn Wait
+                        <span class="text-gray-500 font-normal">(ms)</span>
+                    </label>
+                    <input v-model.number="programConfig.turnWait" type="number" min="0" max="10000" placeholder="1000"
+                        class="px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        :class="{ 'border-red-300 focus:ring-red-500': !isValidNumber(programConfig.turnWait) }" />
+                    <span class="text-xs text-gray-500 mt-1">Duration for left/right turn commands</span>
+                </div>
+
+                <!-- Move Wait -->
+                <div class="flex flex-col">
+                    <label class="text-sm font-medium text-gray-700 mb-1">
+                        Move Wait
+                        <span class="text-gray-500 font-normal">(ms)</span>
+                    </label>
+                    <input v-model.number="programConfig.moveWait" type="number" min="0" max="10000" placeholder="1000"
+                        class="px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        :class="{ 'border-red-300 focus:ring-red-500': !isValidNumber(programConfig.moveWait) }" />
+                    <span class="text-xs text-gray-500 mt-1">Duration for forward/backward movement commands</span>
                 </div>
             </div>
-        </transition>
 
-        <div class="mt-4">
-            <button @click="show_mqtt_info = true" 
-                class="text-sm text-blue-400 hover:text-blue-300 underline">
-                View MQTT Settings Info
+            <button @click="handleConnect"
+                :disabled="!channel || !isValidNumber(programConfig.playbackWait) || !isValidNumber(programConfig.turnWait) || !isValidNumber(programConfig.moveWait)"
+                class='px-4 py-2 mb-2 rounded font-medium transition' :class="[
+                    !channel || !isValidNumber(programConfig.playbackWait) || !isValidNumber(programConfig.turnWait) || !isValidNumber(programConfig.moveWait)
+                        ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                        : 'bg-green-600 text-white hover:bg-green-700'
+                ]">
+                Download Template
             </button>
+        </div>
+
+        <!-- Message Monitor - Bottom Layout -->
+        <div class="mt-auto">
+            <div>
+                <div class="flex items-center justify-between pt-2 mb-2 cursor-pointer min-w-0" @click="toggleMessages">
+                    <h3 class="text-base font-medium flex items-center gap-2 min-w-0 overflow-hidden">
+                        <span :class="[
+                            'inline-block w-2 h-2 rounded-full flex-shrink-0 transition-colors duration-200',
+                            is_connected ? 'bg-green-400' : 'bg-red-400'
+                        ]"></span>
+                        <span class="truncate">Message Monitor</span>
+                        <span class="text-xs text-gray-500 font-normal truncate">({{ received_messages.length }}
+                            messages)</span>
+                    </h3>
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                        <button @click.stop="clearMessages" class="text-xs text-blue-400 hover:underline">
+                            Clear
+                        </button>
+                    </div>
+                </div>
+
+                <transition name="slide">
+                    <div v-show="show_messages" class="bg-gray-800 rounded-lg p-3 text-sm max-h-78 overflow-hidden">
+                        <div class="overflow-y-auto max-h-64">
+                            <p v-if="!received_messages.length" class="text-gray-400 text-center py-4">No messages
+                                received
+                            </p>
+                            <div v-else class="space-y-2">
+                                <div v-for="(msg, index) in [...received_messages].reverse().slice(0, 10)" :key="index"
+                                    class="flex items-start gap-3 px-3 py-2 rounded-md bg-gray-700 hover:bg-gray-600 transition-colors duration-150">
+                                    <div class="text-xs text-gray-400 font-mono min-w-fit">
+                                        {{ msg.time }}
+                                    </div>
+                                    <div class="text-sm text-white font-mono break-all flex-1">
+                                        {{ msg.payload }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div v-if="received_messages.length > 10"
+                            class="text-xs text-gray-400 text-center mt-2 pt-2 border-t border-gray-600">
+                            Showing latest 10 of {{ received_messages.length }} messages
+                        </div>
+                    </div>
+                </transition>
+            </div>
+
+            <div class="mt-2">
+                <button @click="show_mqtt_info = true"
+                    class="w-full text-center text-xs text-gray-500 hover:text-gray-700 transition-colors duration-150">
+                    <div class="flex items-center justify-center gap-1">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        MQTT Configuration Info
+                    </div>
+                </button>
+            </div>
         </div>
 
         <transition name="fade">
@@ -128,6 +233,10 @@ const toggleMessages = () => {
                                 <span class="text-gray-400">Playback topic: </span>
                                 <span class="text-white">gogo-pgc/blockly/&lt;channel&gt;</span>
                             </li>
+                            <li>
+                                <span class="text-gray-400">Control topic: </span>
+                                <span class="text-white">gogo-pgc/control/&lt;channel&gt;</span>
+                            </li>
                         </ul>
                     </div>
                     <div class="flex justify-end">
@@ -152,5 +261,17 @@ const toggleMessages = () => {
 .fade-leave-to {
     opacity: 0;
     transform: translateY(-5px);
+}
+
+.slide-enter-active,
+.slide-leave-active {
+    transition: all 0.3s ease;
+}
+
+.slide-enter-from,
+.slide-leave-to {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-10px);
 }
 </style>
