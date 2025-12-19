@@ -1,12 +1,12 @@
 <script setup lang='ts'>
 import { ref, onMounted } from 'vue';
 import { useMqttConnection } from '~/composables/useMqttConnection';
-import type { WebHIDDevice } from '~/types/webhid';
+import { generateLogoCode } from '~/utils/logoGenerator';
 
 const { $mqtt } = useNuxtApp()
 const { channel, is_connected } = useMqttConnection()
 const remoteTopic = ref(useRuntimeConfig().public.mqttRemoteTopic || "")
-const { connect, disconnect, isSupported } = useWebHID()
+const { webhidConnected, connect, disconnect, isSupported, sendReport } = useWebHID()
 
 const received_messages = ref<{ time: string; payload: string }[]>([])
 const show_messages = ref(true)
@@ -34,13 +34,13 @@ onMounted(() => {
     })
 });
 
-const generateProgramTemplate = () => {
+const generateProgramSettings = () => {
     return {
         channel: channel.value,
         playbackWait: programConfig.value.playbackWait,
         turnWait: programConfig.value.turnWait,
         moveWait: programConfig.value.moveWait,
-        timestamp: new Date().toISOString()
+        // timestamp: new Date().toISOString()
     }
 }
 
@@ -51,21 +51,90 @@ const handleConnect = async () => {
     }
 
     try {
-        // Generate program template with current settings
-        const programTemplate = generateProgramTemplate()
-
-        await connect({
-            deviceFilters: [{ vendorId: 0x0461 }],
-            isPrompt: true,
-            connectHandler: (reporter: (data: Uint8Array) => Promise<void>) => {
-                console.log('Connected:', reporter)
-                console.log('Program config:', programTemplate)
-            },
-            disconnectHandler: (event: { device: WebHIDDevice }) => console.log('Disconnected:', event),
-            messageHandler: (data: Uint8Array) => console.log('Message:', data)
-        })
+        await connect()
     } catch (error) {
         console.error('Connection failed:', error)
+    }
+}
+
+const compileLogoProgram = async (logoCode: string) => {
+    const body = new URLSearchParams()
+    body.append('logo', logoCode)
+    body.append('firmware_version', '2')
+    body.append('board_type', '6') // GoGo 7
+    body.append('board_version', '125') // GoGo Board 7E
+
+    return await $fetch('https://public-api.gogoboard.org/logo/dev/compile', {
+        method: 'POST',
+        body: body,
+    })
+}
+
+const sendToDevice = async (byteCodes: number[]) => {
+    if (!sendReport.value) return
+
+    const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+    // 1. Set memory pointer to 0
+    const pointerCmd = new Uint8Array(64).fill(0)
+    pointerCmd[1] = 1 // CATEGORY_MEMORY_CONTROL
+    pointerCmd[2] = 1 // MEM_LOGO_SET_POINTER
+    pointerCmd[3] = 0 // PARAMETER1
+    pointerCmd[4] = 0 // PARAMETER2
+
+    await sendReport.value(pointerCmd)
+    await sleep(20)
+
+    // 2. Write bytecodes in chunks
+    const CHUNK_SIZE = 60 // TX_PACKET_SIZE (64) - 4 header bytes
+    for (let offset = 0; offset < byteCodes.length; offset += CHUNK_SIZE) {
+        const chunk = byteCodes.slice(offset, offset + CHUNK_SIZE)
+        const writeCmd = new Uint8Array(64).fill(0)
+
+        writeCmd[1] = 1            // CATEGORY_MEMORY_CONTROL
+        writeCmd[2] = 3            // MEM_WRITE
+        writeCmd[3] = chunk.length // Data length
+
+        chunk.forEach((byte, i) => {
+            writeCmd[4 + i] = byte
+        })
+
+        await sendReport.value(writeCmd)
+        // Delay allows the processor to finish writing to flash
+        await sleep(20)
+    }
+
+    // 3. Send beep command [0, 0, 11] as confirmation
+    const beepCmd = new Uint8Array(64).fill(0)
+    beepCmd[1] = 0  // CATEGORY_SYSTEM (assumed)
+    beepCmd[2] = 11 // CMD_BEEP
+
+    await sendReport.value(beepCmd)
+}
+
+const downloadTemplateProgram = async () => {
+    if (!webhidConnected.value) {
+        console.log('webhid is not connected, connecting...')
+        handleConnect()
+        if (!webhidConnected.value) return
+    }
+
+    // TODO: send program template to cloud compiler and retrieve the byte codes
+    try {
+        // Generate program template with current settings
+        const logoProgram = generateLogoCode(generateProgramSettings())
+        console.log(logoProgram)
+
+        const response: any = await compileLogoProgram(logoProgram)
+        const byteCodes = response.data || response
+        console.log('Received byte codes from cloud compiler:', byteCodes)
+
+        if (Array.isArray(byteCodes)) {
+            await sendToDevice(byteCodes)
+            console.log('Program downloaded successfully')
+        }
+    } catch (error) {
+        console.error('Failed to download program:', error)
     }
 }
 
@@ -139,7 +208,7 @@ const isValidNumber = (value: number, min = 0, max = 10000) => {
                 </div>
             </div>
 
-            <button @click="handleConnect"
+            <button @click="downloadTemplateProgram"
                 :disabled="!channel || !isValidNumber(programConfig.playbackWait) || !isValidNumber(programConfig.turnWait) || !isValidNumber(programConfig.moveWait)"
                 class='px-4 py-2 mb-2 rounded font-medium transition' :class="[
                     !channel || !isValidNumber(programConfig.playbackWait) || !isValidNumber(programConfig.turnWait) || !isValidNumber(programConfig.moveWait)
