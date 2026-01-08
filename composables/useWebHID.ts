@@ -10,7 +10,7 @@ export const useWebHID = () => {
     deviceFilters: [{ vendorId: 0x0461 }],
     isPrompt: true,
     connectHandler: (reporter: (data: Uint8Array) => Promise<void>) => {
-      console.log('Connected:', reporter)
+      console.log('WebHID connected:', reporter)
       sendReport.value = reporter
       webhidConnected.value = true
     },
@@ -19,6 +19,16 @@ export const useWebHID = () => {
       // console.log('Message:', data)
     },
   }
+
+  onMounted(async () => {
+    if (!webhidConnected.value && $webhid.isSupported()) {
+      try {
+        await $webhid.connect({ ...webhidConnectOptions, isPrompt: false })
+      } catch (error) {
+        console.error('WebHID auto-connect failed:', error)
+      }
+    }
+  })
 
   return {
     webhidConnected: readonly(webhidConnected),

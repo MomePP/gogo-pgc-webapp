@@ -86,7 +86,11 @@ const webhid = {
       throw new NoDeviceError()
     }
 
-    return this.openDevice(toConnectedDevice, messageHandler)
+    const reporter = await this.openDevice(toConnectedDevice, messageHandler)
+    if (typeof connectHandler === 'function' && reporter) {
+      connectHandler(reporter)
+    }
+    return reporter
   },
   disconnect() {
     /** Unregister all events */

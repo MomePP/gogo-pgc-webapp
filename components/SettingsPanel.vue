@@ -113,9 +113,9 @@ const sendToDevice = async (byteCodes: number[]) => {
 }
 
 const downloadTemplateProgram = async () => {
+    console.log('Downloading template program..., connected:', webhidConnected.value)
     if (!webhidConnected.value) {
-        console.log('webhid is not connected, connecting...')
-        handleConnect()
+        await handleConnect()
         if (!webhidConnected.value) return
     }
 
