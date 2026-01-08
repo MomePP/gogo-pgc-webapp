@@ -119,7 +119,6 @@ const downloadTemplateProgram = async () => {
         if (!webhidConnected.value) return
     }
 
-    // TODO: send program template to cloud compiler and retrieve the byte codes
     try {
         // Generate program template with current settings
         const logoProgram = generateLogoCode(generateProgramSettings())

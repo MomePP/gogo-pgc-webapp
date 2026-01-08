@@ -23,7 +23,6 @@ const generatedCode = ref('');
 let workspace = Blockly.WorkspaceSvg;
 let gogoGenerator = null;
 
-let lastReceivedTime = 0;
 let lastActiveBlock = null; // Track the last block used (from MQTT or user)
 
 class BiMap {
@@ -275,8 +274,6 @@ const initWorkspace = () => {
 const clearBlocks = () => {
     workspace.clear()
     initWorkspace()
-
-    lastReceivedTime = 0
 };
 
 const controlDownload = () => {
