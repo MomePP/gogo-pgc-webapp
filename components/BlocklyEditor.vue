@@ -101,6 +101,18 @@ onMounted(() => {
     initWorkspace()
     workspace.scrollCenter()
 
+    // Keep the flyout always visible
+    const toolbox = workspace.getToolbox();
+    if (toolbox) {
+        const toolboxItems = toolbox.getToolboxItems();
+        if (toolboxItems.length > 0) {
+            // Select the first category to open the flyout
+            toolbox.setSelectedItem(toolboxItems[0]);
+        }
+        // Override the method that closes the flyout when clicking the workspace
+        toolbox.clearSelection = () => {};
+    }
+
     // Track user-added blocks
     workspace.addChangeListener((event) => {
         // BLOCK_CREATE — track single new block
