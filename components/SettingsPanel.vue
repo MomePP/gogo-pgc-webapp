@@ -110,6 +110,15 @@ const sendToDevice = async (byteCodes: number[]) => {
     beepCmd[2] = 11 // CMD_BEEP
 
     await sendReport.value(beepCmd)
+    await sleep(20)
+
+    // 4. Send run program command [0, 0, 13, 1] to start execution
+    const runCmd = new Uint8Array(64).fill(0)
+    runCmd[1] = 0  // CATEGORY_SYSTEM (assumed)
+    runCmd[2] = 13 // CMD_RUN_LOGO_PROGRAM
+    runCmd[3] = 1 // PARAMETER1, 0: stop, 1: run, 2:toggle
+
+    await sendReport.value(runCmd)
 }
 
 const downloadTemplateProgram = async () => {
