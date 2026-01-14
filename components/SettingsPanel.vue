@@ -6,7 +6,7 @@ import { generateLogoCode } from '~/utils/logoGenerator';
 const { $mqtt } = useNuxtApp()
 const { channel, is_connected } = useMqttConnection()
 const remoteTopic = ref(useRuntimeConfig().public.mqttRemoteTopic || "")
-const { webhidConnected, connect, disconnect, isSupported, sendReport } = useWebHID()
+const { webhidConnected, connect, disconnect, isSupported, sendReport, notification } = useWebHID()
 
 const received_messages = ref<{ time: string; payload: string }[]>([])
 const show_messages = ref(true)
@@ -314,6 +314,23 @@ const isValidNumber = (value: number, min = 0, max = 10000) => {
                         </button>
                     </div>
                 </div>
+            </div>
+        </transition>
+
+        <!-- Notification Toast -->
+        <transition name="fade">
+            <div v-if="notification"
+                class="fixed bottom-4 right-4 z-50 px-6 py-3 rounded-lg shadow-xl text-white font-medium flex items-center gap-3"
+                :class="{
+                    'bg-green-600': notification.type === 'success',
+                    'bg-blue-600': notification.type === 'info',
+                    'bg-red-600': notification.type === 'error'
+                }">
+                <svg v-if="notification.type === 'success'" class="w-5 h-5" fill="none" stroke="currentColor"
+                    viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                <span>{{ notification.message }}</span>
             </div>
         </transition>
     </div>
