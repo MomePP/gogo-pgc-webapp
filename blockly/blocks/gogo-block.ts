@@ -4,7 +4,7 @@ import timeBlocks from './categories/time'
 
 export default function (Blockly: any) {
 
-    basicBlocks(Blockly)
+    Blockly.common.defineBlocks(basicBlocks(Blockly))
     Blockly.common.defineBlocks(controlBlocks(Blockly))
     Blockly.common.defineBlocks(timeBlocks(Blockly))
 

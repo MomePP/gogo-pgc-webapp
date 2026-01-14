@@ -8,20 +8,21 @@ export interface LogoProgramSettings {
 export const generateLogoCode = (config: LogoProgramSettings): string => {
     return `to start
     set command 0
-    set commands ""
+    set commands "0001"
     set forward2 "F"
     set backward "B"
     set left "L"
     set right "R"
     set stop2 "S"
-    set run "run"
+    set program_run "run"
+    set program_stop "stop"
+    set program_repeat 1
     set playback_wait (${config.playbackWait}) 
     set move_wait (${config.moveWait}) 
     set turn_wait (${config.turnWait}) 
     set is_record 0
     set is_playback 0
     set i 0
-    set run 0
     set action 0
     set index 0
     set ir_code 0
@@ -31,13 +32,20 @@ export const generateLogoCode = (config: LogoProgramSettings): string => {
         wait 60
         beep
         set commands (message)
+        set program_repeat tonumber(( ( ( (textat commands (0)) + (textat commands (1)) ) + (textat commands (2)) ) + (textat commands (3)) )) 
+        set index (4) 
+        show program_repeat
     ]
     subscribemessage "gogo-pgc/control/${config.channel}"
     [
-        if ( message = run )
-    [
-        set is_playback (1) 
-    ]
+        if ( message = program_run )
+        [
+            set is_playback (1) 
+        ]
+        if ( message = program_stop )
+        [
+            set is_playback (0) 
+        ]
     ]
     dobackground
     [
@@ -75,6 +83,7 @@ export const generateLogoCode = (config: LogoProgramSettings): string => {
             ]
             _then ( ir_code = 25 )
             [
+                set is_playback (0)
                 clear_playback
                 show "clear playback "
             ]
@@ -101,12 +110,75 @@ export const generateLogoCode = (config: LogoProgramSettings): string => {
         ]
         if is_playback
         [
-            show "playback "
+            show "playback"
             wait 300
             playback
             set is_playback (0) 
         ]
     ]
+end
+
+to publish_commands
+    beep
+    wait 40
+    beep
+    publishmessage "gogo-pgc/remote/${config.channel}" commands
+end
+
+to clear_playback
+    set commands "0001"
+end
+
+to playback
+    set is_record (0) 
+    show (textlength commands)
+    wait 200
+    repeat (program_repeat)
+    [
+        if not is_playback
+        [
+            show "finished"
+            break
+        ]
+
+        repeat (textlength commands)
+        [
+            if not is_playback
+            [
+                show "finished"
+                break
+            ]
+
+            set action ((textat commands index)) 
+            show action
+            _if ( action = forward2 )
+            [
+                move_forward
+            ]
+            _then ( action = backward )
+            [
+                move_backward
+            ]
+            _then ( action = left )
+            [
+                move_left
+            ]
+            _then ( action = right )
+            [
+                move_right
+            ]
+            _then ( action = stop2 )
+            [
+                move_stop
+            ]
+            set index index + 1
+            wait playback_wait
+            show " "
+        ]
+        set index (4) 
+    ]
+    set index (4) 
+    show "finished"
 end
 
 to move_stop
@@ -125,60 +197,6 @@ to move_forward
     record_command forward2
 end
 
-to publish_commands
-    beep
-    wait 40
-    beep
-    publishmessage "gogo-pgc/remote/${config.channel}" commands
-end
-
-to move_right
-    output14,
-    cw
-    onfor turn_wait
-    record_command right
-end
-
-to clear_playback
-    set commands ""
-end
-
-to playback
-    set is_record (0) 
-    show (textlength commands)
-    wait 200
-    ; Current implementation, while playback commands, it cannot be stop due to this loop. but need to testing if we clear playback while this loop running.
-    repeat (textlength commands)
-    [
-        set action ((textat commands index)) 
-        show action
-        _if ( action = forward2 )
-        [
-            move_forward
-        ]
-        _then ( action = backward )
-        [
-            move_backward
-        ]
-        _then ( action = left )
-        [
-            move_left
-        ]
-        _then ( action = right )
-        [
-            move_right
-        ]
-        _then ( action = stop2 )
-        [
-            move_stop
-        ]
-        set index index + 1
-        wait playback_wait
-        show " "
-    ]
-    set index (0) 
-end
-
 to move_backward
     output1,
     ccw
@@ -194,6 +212,13 @@ to move_left
     ccw
     onfor turn_wait
     record_command left
+end
+
+to move_right
+    output14,
+    cw
+    onfor turn_wait
+    record_command right
 end
 
 to record_command :command

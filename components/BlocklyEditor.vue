@@ -168,6 +168,14 @@ onMounted(() => {
         const commandPacket = message.toString().trim(); // Convert to string and trim
         console.log(`📩 ${time} - On channel: ${channel.value} received: ${commandPacket}`);
 
+        // Extract first 4-digit repeat count if available
+        let repeatCount = 1;
+        let commandsPart = commandPacket;
+
+        if (/^\d{4}/.test(commandPacket)) {
+            repeatCount = parseInt(commandPacket.slice(0, 4)) || 1;
+            commandsPart = commandPacket.slice(4);
+        }
 
         // Clear all existing blocks and reinitialize workspace
         clearBlocks();
@@ -177,7 +185,12 @@ onMounted(() => {
         const mainStartBlock = allBlocks.find(block => block.type === 'main_start');
         lastActiveBlock = mainStartBlock || null;
 
-        for (const command of resolveCommandPacket(commandPacket)) {
+        // Set repeat count field
+        if (mainStartBlock) {
+            mainStartBlock.setFieldValue(repeatCount.toString(), 'repeat');
+        }
+
+        for (const command of resolveCommandPacket(commandsPart)) {
             createBlockFromCommand(command);
         }
     };
@@ -281,7 +294,7 @@ const createBlockFromCommand = (command) => {
 };
 
 const initWorkspace = () => {
-    let xmlWorkspace = Blockly.utils.xml.textToDom(`<xml><block type="main_start"></block></xml>`)
+    let xmlWorkspace = Blockly.utils.xml.textToDom(`<xml><block type="main_start" deletable="false"></block></xml>`)
     Blockly.Xml.domToWorkspace(xmlWorkspace, workspace)
 }
 
@@ -301,12 +314,16 @@ const controlDownload = () => {
 
     const codeLines = generatedCode.value.trim().split("\n");
     const commands = [];
+    let programRepeat = 0;
     let inStartBlock = false;
 
     for (const line of codeLines) {
         const trimmed = line.trim().toLowerCase();
 
-        if (trimmed === "start") {
+        if (trimmed.startsWith("start")) {
+            programRepeat = parseInt(trimmed.split(" ")[1]) || 1;
+            console.log(`🔁 Program repeat set to ${programRepeat}`);
+
             inStartBlock = true;
             continue;
         }
@@ -325,7 +342,8 @@ const controlDownload = () => {
         return;
     }
 
-    const commandPacket = constructCommandPacket(commands)
+    // INFO: generate command packet, repeat count is 4-digit prefix
+    const commandPacket = `${programRepeat.toString().padStart(4, '0')}` + constructCommandPacket(commands)
     // console.log(`👀 Generated packet\n\n${commandPacket}`);
 
     const topic = blocklyTopic.value + channel.value;
