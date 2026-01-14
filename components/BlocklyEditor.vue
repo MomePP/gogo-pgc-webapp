@@ -338,6 +338,12 @@ const controlRun = () => {
     $mqtt.publish(topic, 'run');
     console.log(`📩 [${channel.value}] sent: control run`);
 };
+
+const controlStop = () => {
+    const topic = controlTopic.value + channel.value;
+    $mqtt.publish(topic, 'stop');
+    console.log(`📩 [${channel.value}] sent: control stop`);
+};
 </script>
 
 <template>
@@ -391,8 +397,14 @@ const controlRun = () => {
                             d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" />
                     </svg>
                 </button>
+                <button @click="controlStop"
+                    class='flex items-center size-10 justify-center rounded-full transition-colors duration-150 bg-red-100 text-red-700 border border-red-300 hover:bg-red-200 hover:border-red-400'>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" class="size-5">
+                        <rect x="5" y="5" width="14" height="14" rx="2" />
+                    </svg>
+                </button>
                 <button @click="controlDownload"
-                    class='flex items-center gap-2 px-4 py-2 text-base font-medium rounded-full transition-colors duration-150 bg-red-100 text-red-700 border border-red-300 hover:bg-red-200 hover:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-500'>
+                    class='flex items-center gap-2 px-4 py-2 text-base font-medium rounded-full transition-colors duration-150 bg-blue-100 text-blue-700 border border-blue-300 hover:bg-blue-200 hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500'>
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
                         stroke="currentColor" class="size-5">
                         <path stroke-linecap="round" stroke-linejoin="round"
