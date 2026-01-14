@@ -104,13 +104,15 @@ onMounted(() => {
     // Keep the flyout always visible
     const toolbox = workspace.getToolbox();
     if (toolbox) {
+        const flyout = toolbox.getFlyout();
+        if (flyout) {
+            flyout.autoClose = false; // Prevent the flyout from closing when a block is dragged out
+        }
+
         const toolboxItems = toolbox.getToolboxItems();
         if (toolboxItems.length > 0) {
-            // Select the first category to open the flyout
-            toolbox.setSelectedItem(toolboxItems[0]);
+            toolbox.setSelectedItem(toolboxItems[0]); // Select the first category to open the flyout
         }
-        // Override the method that closes the flyout when clicking the workspace
-        toolbox.clearSelection = () => {};
     }
 
     // Track user-added blocks
