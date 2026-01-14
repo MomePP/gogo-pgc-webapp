@@ -134,10 +134,14 @@ const downloadTemplateProgram = async () => {
         console.log(logoProgram)
 
         const response: any = await compileLogoProgram(logoProgram)
-        const byteCodes = response.data || response
+        if (response && response.result === false) {
+            console.error('Compilation error:', response.message)
+            return
+        }
+        const byteCodes = response.data
         console.log('Received byte codes from cloud compiler:', byteCodes)
 
-        if (Array.isArray(byteCodes)) {
+        if (Array.isArray(byteCodes) && byteCodes.length > 0) {
             await sendToDevice(byteCodes)
             console.log('Program downloaded successfully')
         }
