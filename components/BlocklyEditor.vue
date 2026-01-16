@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, onBeforeUnmount, ref } from 'vue';
-import { useChannel } from '~/composables/useChannel';
+import { useMqttConnection } from '~/composables/useMqttConnection';
 import { isSidebarCollapsed } from '~/composables/useLayoutState';
 
 import * as Blockly from "blockly/core";
@@ -13,18 +13,16 @@ import customCategory from '~/blockly/custom-category'
 import xmlToolbox from '~/blockly/gogo-toolbox'
 
 const { $mqtt } = useNuxtApp(); // Get Blockly & MQTT from Nuxt plugin
-const { channel } = useChannel()
+const { channel, is_connected, connectChannel } = useMqttConnection()
 const remoteTopic = ref(useRuntimeConfig().public.mqttRemoteTopic || "");
 const blocklyTopic = ref(useRuntimeConfig().public.mqttBlocklyTopic || "");
 const controlTopic = ref(useRuntimeConfig().public.mqttControlTopic || "");
-const is_connected = ref(false)
 let onMessageHandler; // Store the event handler reference
 
 const generatedCode = ref('');
 let workspace = Blockly.WorkspaceSvg;
 let gogoGenerator = null;
 
-let lastReceivedTime = 0;
 let lastActiveBlock = null; // Track the last block used (from MQTT or user)
 
 class BiMap {
@@ -52,7 +50,6 @@ onMounted(() => {
 
     workspace = Blockly.inject('blocklyDiv', {
         toolbox: xmlToolbox,
-        theme: 'modern',
         renderer: 'zelos',
         theme: Blockly.Theme.defineTheme('modern', {
             base: Blockly.Themes.Zelos,
@@ -103,6 +100,20 @@ onMounted(() => {
 
     initWorkspace()
     workspace.scrollCenter()
+
+    // Keep the flyout always visible
+    const toolbox = workspace.getToolbox();
+    if (toolbox) {
+        const flyout = toolbox.getFlyout();
+        if (flyout) {
+            flyout.autoClose = false; // Prevent the flyout from closing when a block is dragged out
+        }
+
+        const toolboxItems = toolbox.getToolboxItems();
+        if (toolboxItems.length > 0) {
+            toolbox.setSelectedItem(toolboxItems[0]); // Select the first category to open the flyout
+        }
+    }
 
     // Track user-added blocks
     workspace.addChangeListener((event) => {
@@ -157,6 +168,14 @@ onMounted(() => {
         const commandPacket = message.toString().trim(); // Convert to string and trim
         console.log(`📩 ${time} - On channel: ${channel.value} received: ${commandPacket}`);
 
+        // Extract first 4-digit repeat count if available
+        let repeatCount = 1;
+        let commandsPart = commandPacket;
+
+        if (/^\d{4}/.test(commandPacket)) {
+            repeatCount = parseInt(commandPacket.slice(0, 4)) || 1;
+            commandsPart = commandPacket.slice(4);
+        }
 
         // Clear all existing blocks and reinitialize workspace
         clearBlocks();
@@ -166,7 +185,12 @@ onMounted(() => {
         const mainStartBlock = allBlocks.find(block => block.type === 'main_start');
         lastActiveBlock = mainStartBlock || null;
 
-        for (const command of resolveCommandPacket(commandPacket)) {
+        // Set repeat count field
+        if (mainStartBlock) {
+            mainStartBlock.setFieldValue(repeatCount.toString(), 'repeat');
+        }
+
+        for (const command of resolveCommandPacket(commandsPart)) {
             createBlockFromCommand(command);
         }
     };
@@ -186,45 +210,6 @@ watch(isSidebarCollapsed, () => {
         Blockly.svgResize(workspace);
     }, 250);
 });
-
-watch(channel, (_, oldChannel) => {
-    if (is_connected.value && oldChannel) {
-        const oldTopic = remoteTopic.value + oldChannel + '/#'
-
-        $mqtt.unsubscribe(oldTopic, (err) => {
-            if (err) {
-                console.warn("⚠️ Failed to unsubscribe from old topic:", err)
-            } else {
-                console.log("🔌 Unsubscribed from channel:", oldChannel)
-            }
-        })
-    }
-    is_connected.value = false
-});
-
-const connectChannel = () => {
-    if (!$mqtt) {
-        console.error("❌ MQTT client is not available!")
-        return
-    }
-
-    if (!channel.value) {
-        console.warn("⚠️ Channel is empty.")
-        return
-    }
-
-    const newTopic = remoteTopic.value + channel.value + "/#";
-
-    $mqtt.subscribe(newTopic, (err) => {
-        if (err) {
-            console.error("❌ Failed to subscribe to topic:", err)
-            is_connected.value = false
-        } else {
-            console.log("✅ Subscribed to channel:", channel.value)
-            is_connected.value = true
-        }
-    })
-};
 
 const resolveCommandPacket = (packet) => {
     return Array.from(packet).map(command => commandMapping.get(command))
@@ -309,15 +294,13 @@ const createBlockFromCommand = (command) => {
 };
 
 const initWorkspace = () => {
-    let xmlWorkspace = Blockly.utils.xml.textToDom(`<xml><block type="main_start"></block></xml>`)
+    let xmlWorkspace = Blockly.utils.xml.textToDom(`<xml><block type="main_start" deletable="false"></block></xml>`)
     Blockly.Xml.domToWorkspace(xmlWorkspace, workspace)
 }
 
 const clearBlocks = () => {
     workspace.clear()
     initWorkspace()
-
-    lastReceivedTime = 0
 };
 
 const controlDownload = () => {
@@ -331,12 +314,16 @@ const controlDownload = () => {
 
     const codeLines = generatedCode.value.trim().split("\n");
     const commands = [];
+    let programRepeat = 0;
     let inStartBlock = false;
 
     for (const line of codeLines) {
         const trimmed = line.trim().toLowerCase();
 
-        if (trimmed === "start") {
+        if (trimmed.startsWith("start")) {
+            programRepeat = parseInt(trimmed.split(" ")[1]) || 1;
+            console.log(`🔁 Program repeat set to ${programRepeat}`);
+
             inStartBlock = true;
             continue;
         }
@@ -355,7 +342,8 @@ const controlDownload = () => {
         return;
     }
 
-    const commandPacket = constructCommandPacket(commands)
+    // INFO: generate command packet, repeat count is 4-digit prefix
+    const commandPacket = `${programRepeat.toString().padStart(4, '0')}` + constructCommandPacket(commands)
     // console.log(`👀 Generated packet\n\n${commandPacket}`);
 
     const topic = blocklyTopic.value + channel.value;
@@ -367,6 +355,12 @@ const controlRun = () => {
     const topic = controlTopic.value + channel.value;
     $mqtt.publish(topic, 'run');
     console.log(`📩 [${channel.value}] sent: control run`);
+};
+
+const controlStop = () => {
+    const topic = controlTopic.value + channel.value;
+    $mqtt.publish(topic, 'stop');
+    console.log(`📩 [${channel.value}] sent: control stop`);
 };
 </script>
 
@@ -421,8 +415,14 @@ const controlRun = () => {
                             d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" />
                     </svg>
                 </button>
+                <button @click="controlStop"
+                    class='flex items-center size-10 justify-center rounded-full transition-colors duration-150 bg-red-100 text-red-700 border border-red-300 hover:bg-red-200 hover:border-red-400'>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" class="size-5">
+                        <rect x="5" y="5" width="14" height="14" rx="2" />
+                    </svg>
+                </button>
                 <button @click="controlDownload"
-                    class='flex items-center gap-2 px-4 py-2 text-base font-medium rounded-full transition-colors duration-150 bg-red-100 text-red-700 border border-red-300 hover:bg-red-200 hover:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-500'>
+                    class='flex items-center gap-2 px-4 py-2 text-base font-medium rounded-full transition-colors duration-150 bg-blue-100 text-blue-700 border border-blue-300 hover:bg-blue-200 hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500'>
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
                         stroke="currentColor" class="size-5">
                         <path stroke-linecap="round" stroke-linejoin="round"

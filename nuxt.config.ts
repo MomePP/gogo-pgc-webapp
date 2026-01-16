@@ -40,6 +40,10 @@ export default defineNuxtConfig({
       mqttControlTopic: process.env.MQTT_CONTROL_TOPIC || "",
     }
   },
+  plugins: [
+    '~/plugins/mqtt-client',
+    '~/plugins/webhid-plugin',
+  ],
   // build: {
   //   transpile: [
   //     'blockly/core', // or just 'blockly' if you're using the full library
