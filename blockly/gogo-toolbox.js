@@ -7,14 +7,9 @@ export default `
         <block type="movement_right"></block>
         <block type="movement_stop"></block>
     </category>
+
+<!-- 
     <category name="Time" categorystyle="time_category">
-        <!-- <block type="time_wait"> -->
-        <!--     <value name="TIME"> -->
-        <!--         <shadow type="math_number"> -->
-        <!--             <field name="NUM">1</field> -->
-        <!--         </shadow> -->
-        <!--     </value> -->
-        <!-- </block> -->
         <block type="time_wait_ms">
             <value name="TIME">
                 <shadow type="math_number">
@@ -321,5 +316,6 @@ export default `
     <sep></sep>
     <category name="Variables" categorystyle="variable_category" custom="VARIABLE"></category>
     <category name="Functions" categorystyle="procedure_category" custom="PROCEDURE"></category>
+-->
 </xml>
 `

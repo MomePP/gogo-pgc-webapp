@@ -258,8 +258,9 @@ export default function(Blockly: any) {
 
 
     gogoGenerator.forBlock['main_start'] = function(block: any, generator: any) {
+        let programRepeat = block.getFieldValue('repeat');
         let statementsStatement = generator.statementToCode(block, 'statement')
-        let code = 'start\n' + statementsStatement + 'end'
+        let code = 'start ' + programRepeat + '\n' + statementsStatement + 'end'
         return code
     }
 

@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, onBeforeUnmount, ref } from 'vue';
-import { useChannel } from '~/composables/useChannel';
+import { useMqttConnection } from '~/composables/useMqttConnection';
 import { isSidebarCollapsed } from '~/composables/useLayoutState';
 
 import * as Blockly from "blockly/core";
@@ -13,20 +13,16 @@ import customCategory from '~/blockly/custom-category'
 import xmlToolbox from '~/blockly/gogo-toolbox'
 
 const { $mqtt } = useNuxtApp(); // Get Blockly & MQTT from Nuxt plugin
-const { channel } = useChannel()
+const { channel, is_connected, connectChannel } = useMqttConnection()
 const remoteTopic = ref(useRuntimeConfig().public.mqttRemoteTopic || "");
 const blocklyTopic = ref(useRuntimeConfig().public.mqttBlocklyTopic || "");
 const controlTopic = ref(useRuntimeConfig().public.mqttControlTopic || "");
 let onMessageHandler; // Store the event handler reference
 
-const trackWait = ref(false);
-const fallbackWaitTime = ref(500);
-
 const generatedCode = ref('');
 let workspace = Blockly.WorkspaceSvg;
 let gogoGenerator = null;
 
-let lastReceivedTime = 0;
 let lastActiveBlock = null; // Track the last block used (from MQTT or user)
 
 class BiMap {
@@ -54,7 +50,6 @@ onMounted(() => {
 
     workspace = Blockly.inject('blocklyDiv', {
         toolbox: xmlToolbox,
-        theme: 'modern',
         renderer: 'zelos',
         theme: Blockly.Theme.defineTheme('modern', {
             base: Blockly.Themes.Zelos,
@@ -104,40 +99,55 @@ onMounted(() => {
     });
 
     initWorkspace()
+    workspace.scrollCenter()
+
+    // Keep the flyout always visible
+    const toolbox = workspace.getToolbox();
+    if (toolbox) {
+        const flyout = toolbox.getFlyout();
+        if (flyout) {
+            flyout.autoClose = false; // Prevent the flyout from closing when a block is dragged out
+        }
+
+        const toolboxItems = toolbox.getToolboxItems();
+        if (toolboxItems.length > 0) {
+            toolbox.setSelectedItem(toolboxItems[0]); // Select the first category to open the flyout
+        }
+    }
 
     // Track user-added blocks
     workspace.addChangeListener((event) => {
         // BLOCK_CREATE — track single new block
-        if (event.type === Blockly.Events.BLOCK_CREATE && event.ids.length === 1) {
-            const newBlock = workspace.getBlockById(event.ids[0]);
-            if (newBlock && !newBlock.isShadow()) {
-                lastActiveBlock = newBlock;
-            }
-        }
+        // if (event.type === Blockly.Events.BLOCK_CREATE && event.ids.length === 1) {
+        //     const newBlock = workspace.getBlockById(event.ids[0]);
+        //     if (newBlock && !newBlock.isShadow()) {
+        //         lastActiveBlock = newBlock;
+        //     }
+        // }
 
         // BLOCK_MOVE — track when a block is moved
-        if (event.type === Blockly.Events.BLOCK_MOVE) {
-            const movedBlock = workspace.getBlockById(event.blockId);
-            if (movedBlock && !movedBlock.isShadow()) {
-                lastActiveBlock = movedBlock;
-            }
-        }
+        // if (event.type === Blockly.Events.BLOCK_MOVE) {
+        //     const movedBlock = workspace.getBlockById(event.blockId);
+        //     if (movedBlock && !movedBlock.isShadow()) {
+        //         lastActiveBlock = movedBlock;
+        //     }
+        // }
 
         // BLOCK_SELECT — track when a block is clicked/selected
-        if (event.type === Blockly.Events.SELECTED && event.newElementId) {
-            const selectedBlock = workspace.getBlockById(event.newElementId);
-            if (selectedBlock && !selectedBlock.isShadow()) {
-                lastActiveBlock = selectedBlock;
-            }
-        }
+        // if (event.type === Blockly.Events.SELECTED && event.newElementId) {
+        //     const selectedBlock = workspace.getBlockById(event.newElementId);
+        //     if (selectedBlock && !selectedBlock.isShadow()) {
+        //         lastActiveBlock = selectedBlock;
+        //     }
+        // }
 
         // BLOCK_DELETE — handle when last active block is deleted
-        if (event.type === Blockly.Events.BLOCK_DELETE) {
-            if (lastActiveBlock && event.ids.includes(lastActiveBlock.id)) {
-                const remainingBlocks = workspace.getAllBlocks(false);
-                lastActiveBlock = remainingBlocks.length > 0 ? remainingBlocks[remainingBlocks.length - 1] : null;
-            }
-        }
+        // if (event.type === Blockly.Events.BLOCK_DELETE) {
+        //     if (lastActiveBlock && event.ids.includes(lastActiveBlock.id)) {
+        //         const remainingBlocks = workspace.getAllBlocks(false);
+        //         lastActiveBlock = remainingBlocks.length > 0 ? remainingBlocks[remainingBlocks.length - 1] : null;
+        //     }
+        // }
 
         generatedCode.value = gogoGenerator.workspaceToCode(workspace).trim();
     });
@@ -158,10 +168,29 @@ onMounted(() => {
         const commandPacket = message.toString().trim(); // Convert to string and trim
         console.log(`📩 ${time} - On channel: ${channel.value} received: ${commandPacket}`);
 
+        // Extract first 4-digit repeat count if available
+        let repeatCount = 1;
+        let commandsPart = commandPacket;
 
-        // INFO: clear lastActiveBlock to disconnected the code block of different command group
-        lastActiveBlock = null
-        for (const command of resolveCommandPacket(commandPacket)) {
+        if (/^\d{4}/.test(commandPacket)) {
+            repeatCount = parseInt(commandPacket.slice(0, 4)) || 1;
+            commandsPart = commandPacket.slice(4);
+        }
+
+        // Clear all existing blocks and reinitialize workspace
+        clearBlocks();
+
+        // Find the main_start block and set it as lastActiveBlock
+        const allBlocks = workspace.getAllBlocks();
+        const mainStartBlock = allBlocks.find(block => block.type === 'main_start');
+        lastActiveBlock = mainStartBlock || null;
+
+        // Set repeat count field
+        if (mainStartBlock) {
+            mainStartBlock.setFieldValue(repeatCount.toString(), 'repeat');
+        }
+
+        for (const command of resolveCommandPacket(commandsPart)) {
             createBlockFromCommand(command);
         }
     };
@@ -227,16 +256,16 @@ const createBlockFromCommand = (command) => {
 
     const newBlock = workspace.newBlock(blockType);
 
-    // Handle arguments if they exist, only handles number argument
+    // handle arguments if they exist, only handles number argument
     if (commandArgs.length > 0 && !isNaN(parseFloat(commandArgs[0]))) {
         const inputName = getInputNameForBlockType(blockType);
         if (inputName && newBlock.getInput(inputName)) {
-            // Create a shadow math_number block
+            // create a shadow math_number block
             const shadowBlock = workspace.newBlock('math_number');
             shadowBlock.setFieldValue(commandArgs[0], 'NUM');
             shadowBlock.initSvg();
 
-            // Connect as shadow block
+            // connect as shadow block
             const connection = newBlock.getInput(inputName).connection;
             connection.connect(shadowBlock.outputConnection);
             shadowBlock.setShadow(true);
@@ -246,9 +275,18 @@ const createBlockFromCommand = (command) => {
     newBlock.initSvg();
     newBlock.render();
 
-    // if there's a last active block, connect this one to it
-    if (lastActiveBlock && lastActiveBlock.nextConnection && newBlock.previousConnection) {
-        lastActiveBlock.nextConnection.connect(newBlock.previousConnection);
+    // connect to the appropriate location
+    if (lastActiveBlock) {
+        if (lastActiveBlock.type === 'main_start') {
+            // connect to the statement input of main_start
+            const statementInput = lastActiveBlock.getInput('statement');
+            if (statementInput && statementInput.connection && newBlock.previousConnection) {
+                statementInput.connection.connect(newBlock.previousConnection);
+            }
+        } else if (lastActiveBlock.nextConnection && newBlock.previousConnection) {
+            // connect to the next connection of the previous block
+            lastActiveBlock.nextConnection.connect(newBlock.previousConnection);
+        }
     }
 
     // Update lastActiveBlock to this new MQTT-created block
@@ -256,16 +294,13 @@ const createBlockFromCommand = (command) => {
 };
 
 const initWorkspace = () => {
-    let xmlWorkspace = Blockly.utils.xml.textToDom(`<xml><block type="main_start"></block></xml>`)
+    let xmlWorkspace = Blockly.utils.xml.textToDom(`<xml><block type="main_start" deletable="false"></block></xml>`)
     Blockly.Xml.domToWorkspace(xmlWorkspace, workspace)
-    workspace.scrollCenter()
 }
 
 const clearBlocks = () => {
     workspace.clear()
     initWorkspace()
-
-    lastReceivedTime = 0
 };
 
 const controlDownload = () => {
@@ -279,12 +314,16 @@ const controlDownload = () => {
 
     const codeLines = generatedCode.value.trim().split("\n");
     const commands = [];
+    let programRepeat = 0;
     let inStartBlock = false;
 
     for (const line of codeLines) {
         const trimmed = line.trim().toLowerCase();
 
-        if (trimmed === "start") {
+        if (trimmed.startsWith("start")) {
+            programRepeat = parseInt(trimmed.split(" ")[1]) || 1;
+            console.log(`🔁 Program repeat set to ${programRepeat}`);
+
             inStartBlock = true;
             continue;
         }
@@ -303,7 +342,8 @@ const controlDownload = () => {
         return;
     }
 
-    const commandPacket = constructCommandPacket(commands)
+    // INFO: generate command packet, repeat count is 4-digit prefix
+    const commandPacket = `${programRepeat.toString().padStart(4, '0')}` + constructCommandPacket(commands)
     // console.log(`👀 Generated packet\n\n${commandPacket}`);
 
     const topic = blocklyTopic.value + channel.value;
@@ -317,8 +357,10 @@ const controlRun = () => {
     console.log(`📩 [${channel.value}] sent: control run`);
 };
 
-const clampFallbackWait = () => {
-    if (fallbackWaitTime.value < 500) fallbackWaitTime.value = 500
+const controlStop = () => {
+    const topic = controlTopic.value + channel.value;
+    $mqtt.publish(topic, 'stop');
+    console.log(`📩 [${channel.value}] sent: control stop`);
 };
 </script>
 
@@ -326,7 +368,7 @@ const clampFallbackWait = () => {
     <div class="h-screen bg-gray-100 flex flex-col">
         <!-- Header -->
         <header class="px-6 py-3 bg-white border-b border-gray-200 shadow-sm flex justify-between items-center">
-            <h1 class="text-2xl font-semibold text-gray-800">GoGo Programming Continuum</h1>
+            <h1 class="text-2xl font-bold bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent tracking-wide">GoGo Programming Continuum</h1>
 
             <div class="absolute top-20 right-8 flex gap-4 bg-white rounded-full shadow-lg px-4 py-2 items-center z-10">
                 <button @click="clearBlocks"
@@ -349,57 +391,44 @@ const clampFallbackWait = () => {
 
         <!-- Footer / Control Panel -->
         <footer class="w-full px-6 py-5 bg-white border-t border-gray-200 shadow-inner flex items-center relative">
-            <!-- <div class="flex items-center gap-2"> -->
-            <!--     <span class="text-sm text-gray-700">Capture wait time</span> -->
-            <!--     <button @click="trackWait = !trackWait" type="button" :aria-pressed="trackWait" -->
-            <!--         class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none" -->
-            <!--         :class="trackWait ? 'bg-blue-600' : 'bg-gray-300'"> -->
-            <!--         <span -->
-            <!--             class="inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200" -->
-            <!--             :class="trackWait ? 'translate-x-5' : 'translate-x-1'" /> -->
-            <!--     </button> -->
-            <!--     <span class="text-xs text-gray-500 font-mono w-8 text-center">{{ trackWait ? 'ON' : 'OFF' }}</span> -->
-            <!-- </div> -->
-
-            <!-- <div class="absolute left-1/2 transform -translate-x-1/2"> -->
-            <!--     <button @click="controlRecording" :class="[ -->
-            <!--         'flex items-center gap-2 px-6 py-2 rounded-full font-semibold shadow transition-colors duration-150 focus:outline-none', -->
-            <!--         isRecording ? 'bg-gray-700 text-white hover:bg-gray-800' : 'bg-red-600 text-white hover:bg-red-700' -->
-            <!--     ]"> -->
-            <!--         <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="white" viewBox="0 0 24 24"> -->
-            <!--             <circle v-if="!isRecording" cx="12" cy="12" r="10" /> -->
-            <!--             <rect v-else x="6" y="6" width="12" height="12" rx="2" /> -->
-            <!--         </svg> -->
-            <!--         <span class="inline-block text-center w-24"> -->
-            <!--             {{ isRecording ? 'Stop Record' : 'Record' }} -->
-            <!--         </span> -->
-            <!--     </button> -->
-            <!-- </div> -->
-
-            <!-- <div class="flex items-center gap-2 ml-auto"> -->
-            <!--     <span class="text-sm text-gray-700">Default wait</span> -->
-            <!--     <input type="number" min=500 v-model.number="fallbackWaitTime" placeholder="ms" -->
-            <!--         @blur="clampFallbackWait" -->
-            <!--         class="w-22 px-3 py-2 rounded-full border border-gray-200 bg-gray-50 text-right text-sm shadow-sm focus:border-blue-400 focus:ring-2 focus:ring-blue-200 transition" /> -->
-            <!--     <span class="text-xs text-gray-500 font-mono">ms</span> -->
-            <!-- </div> -->
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <label class="text-base font-medium text-gray-700">Channel:</label>
+                    <input v-model="channel" placeholder="Enter channel"
+                        class="w-36 px-4 py-2 text-base font-medium border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 hover:bg-gray-100 transition-colors duration-150" />
+                </div>
+                <button @click="connectChannel" :disabled="is_connected" :class="[
+                    'w-36 px-4 py-2 text-base font-medium rounded-full transition-colors duration-150',
+                    is_connected
+                        ? 'bg-green-100 text-green-700 border border-green-300 cursor-not-allowed'
+                        : 'bg-blue-100 text-blue-700 border border-blue-300 hover:bg-blue-200 hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500'
+                ]">
+                    {{ is_connected ? '✅ Connected' : 'Connect' }}
+                </button>
+            </div>
             <div class="flex items-center gap-2 ml-auto">
                 <button @click="controlRun"
-                    class='flex items-center size-12 justify-center rounded-full transition bg-green-400 hover:bg-green-600'>
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="white" viewBox="0 0 24 24" stroke-width="2"
-                        stroke="white" class="size-6">
+                    class='flex items-center size-10 justify-center rounded-full transition-colors duration-150 bg-green-100 text-green-700 border border-green-300 hover:bg-green-200 hover:border-green-400'>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" stroke-width="2"
+                        stroke="currentColor" class="size-5">
                         <path stroke-linecap="round" stroke-linejoin="round"
                             d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" />
                     </svg>
                 </button>
+                <button @click="controlStop"
+                    class='flex items-center size-10 justify-center rounded-full transition-colors duration-150 bg-red-100 text-red-700 border border-red-300 hover:bg-red-200 hover:border-red-400'>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" class="size-5">
+                        <rect x="5" y="5" width="14" height="14" rx="2" />
+                    </svg>
+                </button>
                 <button @click="controlDownload"
-                    class='flex items-center gap-3 px-6 py-3 text-lg rounded-full font-medium transition bg-red-600 text-white hover:bg-red-700'>
+                    class='flex items-center gap-2 px-4 py-2 text-base font-medium rounded-full transition-colors duration-150 bg-blue-100 text-blue-700 border border-blue-300 hover:bg-blue-200 hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500'>
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
-                        stroke="currentColor" class="size-6">
+                        stroke="currentColor" class="size-5">
                         <path stroke-linecap="round" stroke-linejoin="round"
                             d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
                     </svg>
-                    {{ 'Download' }}
+                    Download
                 </button>
             </div>
         </footer>
@@ -445,5 +474,56 @@ const clampFallbackWait = () => {
 
 .blocklyTreeRow {
     height: initial;
+}
+
+/* Wiggle animation */
+@keyframes wiggle {
+  0%, 7% { transform: rotateZ(0deg); }
+  15% { transform: rotateZ(-15deg); }
+  20% { transform: rotateZ(10deg); }
+  25% { transform: rotateZ(-10deg); }
+  30% { transform: rotateZ(6deg); }
+  35% { transform: rotateZ(-4deg); }
+  40%, 100% { transform: rotateZ(0deg); }
+}
+
+.wiggle {
+  animation: wiggle 2s ease-in-out infinite;
+}
+
+/* Gradient color shift */
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.gradient-animate {
+  background: linear-gradient(-45deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #ffeaa7);
+  background-size: 400% 400%;
+  animation: gradient-shift 3s ease infinite;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Floating effect */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+.float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Sparkle effect */
+@keyframes sparkle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.1); }
+}
+
+.sparkle {
+  animation: sparkle 1.5s ease-in-out infinite;
 }
 </style>
