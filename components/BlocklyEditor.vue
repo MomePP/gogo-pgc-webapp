@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, onBeforeUnmount, ref } from 'vue';
 import { useMqttConnection } from '~/composables/useMqttConnection';
-import { isSidebarCollapsed } from '~/composables/useLayoutState';
+import { isSidebarCollapsed, notify } from '~/composables/useLayoutState';
 
 import * as Blockly from "blockly/core";
 import * as En from "blockly/msg/en";
@@ -13,7 +13,9 @@ import customCategory from '~/blockly/custom-category'
 import xmlToolbox from '~/blockly/gogo-toolbox'
 
 const { $mqtt } = useNuxtApp(); // Get Blockly & MQTT from Nuxt plugin
+const { webhidConnected } = useWebHID()
 const { channel, is_connected, connectChannel } = useMqttConnection()
+const connectedChannelKey = ref("");
 const remoteTopic = ref(useRuntimeConfig().public.mqttRemoteTopic || "");
 const blocklyTopic = ref(useRuntimeConfig().public.mqttBlocklyTopic || "");
 const controlTopic = ref(useRuntimeConfig().public.mqttControlTopic || "");
@@ -211,6 +213,27 @@ watch(isSidebarCollapsed, () => {
     }, 250);
 });
 
+// Watch for Cloud Disconnection
+watch(is_connected, (connected, wasConnected) => {
+    if (connected) {
+        notify('Cloud connected successfully!', 'success');
+        connectedChannelKey.value = channel.value; // Store the active channel
+    } else if (wasConnected && !connected) {
+        // Only notify error if the channel in the input matches the one that was connected
+        // (If they are different, it means the user is intentionally switching)
+        if (connectedChannelKey.value === channel.value) {
+            notify('Cloud connection lost. Check your internet.', 'error');
+        }
+    }
+});
+
+// Watch for USB Disconnection
+watch(webhidConnected, (connected, wasConnected) => {
+    if (wasConnected && !connected) {
+        notify('USB Device unplugged.', 'error');
+    }
+});
+
 const resolveCommandPacket = (packet) => {
     return Array.from(packet).map(command => commandMapping.get(command))
 };
@@ -365,45 +388,62 @@ const controlStop = () => {
 </script>
 
 <template>
-    <div class="h-screen bg-gray-100 flex flex-col">
+    <div class="h-screen bg-gray-50 flex flex-col overflow-hidden">
         <!-- Header -->
-        <header class="px-6 py-3 bg-white border-b border-gray-200 shadow-sm flex justify-between items-center">
-            <h1 class="text-2xl font-bold bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent tracking-wide">GoGo Programming Continuum</h1>
-
-            <div class="absolute top-20 right-8 flex gap-4 bg-white rounded-full shadow-lg px-4 py-2 items-center z-10">
-                <button @click="clearBlocks"
-                    class="flex items-center gap-2 text-sm font-medium hover:text-gray-800 text-gray-500 transition-colors duration-150"
-                    aria-label="Stop" title="Clear Blocks">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
-                        stroke="currentColor" class="size-5">
-                        <path stroke-linecap="round" stroke-linejoin="round"
-                            d="m20.25 7.5-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5m6 4.125 2.25 2.25m0 0 2.25 2.25M12 13.875l2.25-2.25M12 13.875l-2.25 2.25M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z" />
+        <header class="px-6 py-3 bg-white border-b border-gray-100 flex justify-between items-center z-20">
+            <div class="flex items-center gap-4">
+                <!-- Main Logo Icon Theme -->
+                <div class="p-2 bg-indigo-500/10 rounded-xl text-indigo-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" 
+                            d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z" />
                     </svg>
-                    Clear Blocks
-                </button>
+                </div>
+                <h1 class="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent tracking-wide">
+                    GoGo Programming Continuum
+                </h1>
             </div>
         </header>
 
-        <!-- Blockly Workspace -->
-        <div class="flex-1 relative">
+        <!-- Main Workspace Area -->
+        <main class="flex-1 relative min-h-0">
+            <!-- Floating Top-Right Controls -->
+            <div class="absolute top-6 right-8 flex items-center gap-3 z-30">
+                <!-- Pill 1: Activity Feed -->
+                <MessageMonitor />
+
+                <!-- Pill 2: Clear Blocks -->
+                <button @click="clearBlocks"
+                    class="flex items-center gap-2 bg-white rounded-full shadow-lg px-4 py-2 text-sm font-semibold hover:text-gray-900 text-gray-500 transition-all border border-gray-100 hover:border-gray-200"
+                    title="Clear Blocks">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                        stroke="currentColor" class="size-4 text-gray-400">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="m20.25 7.5-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5m6 4.125 2.25 2.25m0 0 2.25 2.25M12 13.875l2.25-2.25M12 13.875l-2.25 2.25M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z" />
+                    </svg>
+                    <span>Clear Blocks</span>
+                </button>
+            </div>
+
+            <!-- Workspace -->
             <div id="blocklyDiv" class="absolute inset-0"></div>
-        </div>
+        </main>
 
         <!-- Footer / Control Panel -->
-        <footer class="w-full px-6 py-5 bg-white border-t border-gray-200 shadow-inner flex items-center relative">
+        <footer class="w-full px-6 py-4 bg-white border-t border-gray-100 z-20 flex items-center relative">
             <div class="flex items-center gap-4">
                 <div class="flex items-center gap-2">
                     <label class="text-base font-medium text-gray-700">Channel:</label>
-                    <input v-model="channel" placeholder="Enter channel"
+                    <input v-model="channel" placeholder="Enter channel" @keyup.enter="connectChannel"
                         class="w-36 px-4 py-2 text-base font-medium border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 hover:bg-gray-100 transition-colors duration-150" />
                 </div>
                 <button @click="connectChannel" :disabled="is_connected" :class="[
-                    'w-36 px-4 py-2 text-base font-medium rounded-full transition-colors duration-150',
+                    'px-6 py-2 text-base font-medium rounded-full transition-colors duration-150 whitespace-nowrap',
                     is_connected
-                        ? 'bg-green-100 text-green-700 border border-green-300 cursor-not-allowed'
-                        : 'bg-blue-100 text-blue-700 border border-blue-300 hover:bg-blue-200 hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500'
+                        ? 'bg-green-50 text-green-700 border border-green-200 cursor-not-allowed'
+                        : 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500'
                 ]">
-                    {{ is_connected ? '✅ Connected' : 'Connect' }}
+                    {{ is_connected ? 'Connected' : 'Connect Cloud' }}
                 </button>
             </div>
             <div class="flex items-center gap-2 ml-auto">
@@ -478,52 +518,99 @@ const controlStop = () => {
 
 /* Wiggle animation */
 @keyframes wiggle {
-  0%, 7% { transform: rotateZ(0deg); }
-  15% { transform: rotateZ(-15deg); }
-  20% { transform: rotateZ(10deg); }
-  25% { transform: rotateZ(-10deg); }
-  30% { transform: rotateZ(6deg); }
-  35% { transform: rotateZ(-4deg); }
-  40%, 100% { transform: rotateZ(0deg); }
+
+    0%,
+    7% {
+        transform: rotateZ(0deg);
+    }
+
+    15% {
+        transform: rotateZ(-15deg);
+    }
+
+    20% {
+        transform: rotateZ(10deg);
+    }
+
+    25% {
+        transform: rotateZ(-10deg);
+    }
+
+    30% {
+        transform: rotateZ(6deg);
+    }
+
+    35% {
+        transform: rotateZ(-4deg);
+    }
+
+    40%,
+    100% {
+        transform: rotateZ(0deg);
+    }
 }
 
 .wiggle {
-  animation: wiggle 2s ease-in-out infinite;
+    animation: wiggle 2s ease-in-out infinite;
 }
 
 /* Gradient color shift */
 @keyframes gradient-shift {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+    0% {
+        background-position: 0% 50%;
+    }
+
+    50% {
+        background-position: 100% 50%;
+    }
+
+    100% {
+        background-position: 0% 50%;
+    }
 }
 
 .gradient-animate {
-  background: linear-gradient(-45deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #ffeaa7);
-  background-size: 400% 400%;
-  animation: gradient-shift 3s ease infinite;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+    background: linear-gradient(-45deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #ffeaa7);
+    background-size: 400% 400%;
+    animation: gradient-shift 3s ease infinite;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
 /* Floating effect */
 @keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-10px); }
+
+    0%,
+    100% {
+        transform: translateY(0px);
+    }
+
+    50% {
+        transform: translateY(-10px);
+    }
 }
 
 .float {
-  animation: float 3s ease-in-out infinite;
+    animation: float 3s ease-in-out infinite;
 }
 
 /* Sparkle effect */
 @keyframes sparkle {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.8; transform: scale(1.1); }
+
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 0.8;
+        transform: scale(1.1);
+    }
 }
 
 .sparkle {
-  animation: sparkle 1.5s ease-in-out infinite;
+    animation: sparkle 1.5s ease-in-out infinite;
 }
 </style>

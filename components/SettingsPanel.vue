@@ -2,15 +2,21 @@
 import { ref, onMounted } from 'vue';
 import { useMqttConnection } from '~/composables/useMqttConnection';
 import { generateLogoCode } from '~/utils/logoGenerator';
+import { isSidebarCollapsed, toggleSidebar, notify } from '~/composables/useLayoutState';
 
 const { $mqtt } = useNuxtApp()
-const { channel, is_connected } = useMqttConnection()
+const { channel } = useMqttConnection()
 const remoteTopic = ref(useRuntimeConfig().public.mqttRemoteTopic || "")
-const { webhidConnected, connect, disconnect, isSupported, sendReport, notification } = useWebHID()
+const { webhidConnected, connect, disconnect, isSupported, sendReport } = useWebHID()
 
 const received_messages = ref<{ time: string; payload: string }[]>([])
-const show_messages = ref(true)
 const show_mqtt_info = ref(false)
+
+const showPassword = ref(false)
+const wifiConfig = ref({
+    ssid: '',
+    password: ''
+})
 
 const programConfig = ref({
     playbackWait: 500, // milliseconds
@@ -135,7 +141,7 @@ const downloadTemplateProgram = async () => {
 
         const response: any = await compileLogoProgram(logoProgram)
         if (response && response.result === false) {
-            console.error('Compilation error:', response.message)
+            notify(`Compilation error: ${response.message}`, 'error')
             return
         }
         const byteCodes = response.data
@@ -143,152 +149,183 @@ const downloadTemplateProgram = async () => {
 
         if (Array.isArray(byteCodes) && byteCodes.length > 0) {
             await sendToDevice(byteCodes)
-            console.log('Program downloaded successfully')
+            notify('Program downloaded successfully', 'success')
         }
     } catch (error) {
-        console.error('Failed to download program:', error)
+        notify('Failed to download program', 'error')
     }
-}
-
-const clearMessages = () => {
-    received_messages.value = []
 };
 
-const toggleMessages = () => {
-    show_messages.value = !show_messages.value
+const sendWifiConfig = async () => {
+    if (!webhidConnected.value) {
+        console.log('WebHID not connected, connecting before sending WiFi config...')
+        await handleConnect()
+        if (!webhidConnected.value) return
+    }
+
+    if (!sendReport.value) return
+
+    try {
+        const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+        // 1. Send SSID
+        const ssidBytes = new TextEncoder().encode(wifiConfig.value.ssid)
+        const ssidCmd = new Uint8Array(64).fill(0)
+        ssidCmd[1] = 1  // Category: Memory/Control
+        ssidCmd[2] = 10 // Cmd: Set WiFi SSID
+        ssidCmd[3] = ssidBytes.length
+        ssidBytes.forEach((byte, i) => ssidCmd[4 + i] = byte)
+        await sendReport.value(ssidCmd)
+        await sleep(50)
+
+        // 2. Send Password
+        const passBytes = new TextEncoder().encode(wifiConfig.value.password)
+        const passCmd = new Uint8Array(64).fill(0)
+        passCmd[1] = 1  // Category: Memory/Control
+        passCmd[2] = 11 // Cmd: Set WiFi Password
+        passCmd[3] = passBytes.length
+        passBytes.forEach((byte, i) => passCmd[4 + i] = byte)
+        await sendReport.value(passCmd)
+        await sleep(50)
+
+        // 3. Beep to confirm
+        const beepCmd = new Uint8Array(64).fill(0)
+        beepCmd[1] = 0
+        beepCmd[2] = 11
+        await sendReport.value(beepCmd)
+
+        notify('WiFi configuration sent!', 'success')
+    } catch (error) {
+        notify('Failed to send WiFi configuration.', 'error')
+    }
 };
 
 const isValidNumber = (value: number, min = 0, max = 10000) => {
     return !isNaN(value) && value >= min && value <= max
-}
+};
+
+const blurInput = (e: Event) => {
+    (e.target as HTMLInputElement).blur()
+};
 </script>
 
 <template>
-    <div class="p-4 flex flex-col" style="height: 100vh;">
-        <div class="flex-shrink-0">
-            <h2 class="text-xl font-bold mb-6">Settings</h2>
-
-            <div class="flex items-center justify-between mb-1">
-                <label class="text-base font-medium">Template Program Setup</label>
+    <div class="px-5 py-6 flex flex-col h-screen overflow-hidden bg-gray-900 text-gray-100 font-sans">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-8 flex-shrink-0 h-9">
+            <div class="flex items-center gap-3">
+                <div class="p-2 bg-blue-500/20 rounded-xl text-blue-400">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                </div>
+                <h2 class="text-sm font-black uppercase tracking-widest text-gray-400">Control Center</h2>
             </div>
-            <!-- Configuration Form -->
-            <div class="bg-gray-50 rounded-lg p-4 mb-4 space-y-4">
-                <!-- Channel Input -->
-                <div class="flex flex-col">
-                    <label class="text-sm font-medium text-gray-700 mb-1">Channel</label>
-                    <input v-model.number="channel" type="number" placeholder="Enter channel number"
-                        class="px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        :class="{ 'border-red-300 focus:ring-red-500': !channel }" />
-                    <span v-if="!channel" class="text-xs text-red-500 mt-1">Channel is required</span>
-                </div>
-
-                <!-- Playback Wait -->
-                <div class="flex flex-col">
-                    <label class="text-sm font-medium text-gray-700 mb-1">
-                        Playback Wait
-                        <span class="text-gray-500 font-normal">(ms)</span>
-                    </label>
-                    <input v-model.number="programConfig.playbackWait" type="number" min="0" max="10000"
-                        placeholder="500"
-                        class="px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        :class="{ 'border-red-300 focus:ring-red-500': !isValidNumber(programConfig.playbackWait) }" />
-                    <span class="text-xs text-gray-500 mt-1">Wait time between commands during playback</span>
-                </div>
-
-                <!-- Turn Wait -->
-                <div class="flex flex-col">
-                    <label class="text-sm font-medium text-gray-700 mb-1">
-                        Turn Wait
-                        <span class="text-gray-500 font-normal">(ms)</span>
-                    </label>
-                    <input v-model.number="programConfig.turnWait" type="number" min="0" max="10000" placeholder="1000"
-                        class="px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        :class="{ 'border-red-300 focus:ring-red-500': !isValidNumber(programConfig.turnWait) }" />
-                    <span class="text-xs text-gray-500 mt-1">Duration for left/right turn commands</span>
-                </div>
-
-                <!-- Move Wait -->
-                <div class="flex flex-col">
-                    <label class="text-sm font-medium text-gray-700 mb-1">
-                        Move Wait
-                        <span class="text-gray-500 font-normal">(ms)</span>
-                    </label>
-                    <input v-model.number="programConfig.moveWait" type="number" min="0" max="10000" placeholder="1000"
-                        class="px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        :class="{ 'border-red-300 focus:ring-red-500': !isValidNumber(programConfig.moveWait) }" />
-                    <span class="text-xs text-gray-500 mt-1">Duration for forward/backward movement commands</span>
-                </div>
-            </div>
-
-            <button @click="downloadTemplateProgram"
-                :disabled="!channel || !isValidNumber(programConfig.playbackWait) || !isValidNumber(programConfig.turnWait) || !isValidNumber(programConfig.moveWait)"
-                class='px-4 py-2 mb-2 rounded font-medium transition' :class="[
-                    !channel || !isValidNumber(programConfig.playbackWait) || !isValidNumber(programConfig.turnWait) || !isValidNumber(programConfig.moveWait)
-                        ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
-                        : 'bg-green-600 text-white hover:bg-green-700'
-                ]">
-                Download Template
+            <button @click="toggleSidebar" class="p-2 hover:bg-white/10 rounded-full text-gray-500 transition-colors">
+                <svg v-if="!isSidebarCollapsed" class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="m18.75 4.5-7.5 7.5 7.5 7.5m-6-15L5.25 12l7.5 7.5" />
+                </svg>
+                <svg v-else class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="m5.25 4.5 7.5 7.5-7.5 7.5m6-15 7.5 7.5-7.5 7.5" />
+                </svg>
             </button>
         </div>
 
-        <!-- Message Monitor - Bottom Layout -->
-        <div class="mt-auto">
-            <div>
-                <div class="flex items-center justify-between pt-2 mb-2 cursor-pointer min-w-0" @click="toggleMessages">
-                    <h3 class="text-base font-medium flex items-center gap-2 min-w-0 overflow-hidden">
-                        <span :class="[
-                            'inline-block w-2 h-2 rounded-full flex-shrink-0 transition-colors duration-200',
-                            is_connected ? 'bg-green-400' : 'bg-red-400'
-                        ]"></span>
-                        <span class="truncate">Message Monitor</span>
-                        <span class="text-xs text-gray-500 font-normal truncate">({{ received_messages.length }}
-                            messages)</span>
-                    </h3>
-                    <div class="flex items-center gap-2 flex-shrink-0">
-                        <button @click.stop="clearMessages" class="text-xs text-blue-400 hover:underline">
-                            Clear
-                        </button>
-                    </div>
+        <!-- Scrollable Forms -->
+        <div class="flex-1 overflow-y-auto space-y-6 pr-1 min-h-0 custom-scrollbar pb-8">
+            <!-- 1. Device Status Card -->
+            <div class="bg-gray-800/40 rounded-3xl p-5 border border-white/5 shadow-sm">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="size-2 rounded-full shadow-[0_0_8px_rgba(255,255,255,0.5)]" :class="webhidConnected ? 'bg-green-400' : 'bg-red-400'"></div>
+                    <span class="text-xs font-bold uppercase tracking-widest text-gray-300">Board Status</span>
                 </div>
-
-                <transition name="slide">
-                    <div v-show="show_messages" class="bg-gray-800 rounded-lg p-3 text-sm max-h-78 overflow-hidden">
-                        <div class="overflow-y-auto max-h-64">
-                            <p v-if="!received_messages.length" class="text-gray-400 text-center py-4">No messages
-                                received
-                            </p>
-                            <div v-else class="space-y-2">
-                                <div v-for="(msg, index) in [...received_messages].reverse().slice(0, 10)" :key="index"
-                                    class="flex items-start gap-3 px-3 py-2 rounded-md bg-gray-700 hover:bg-gray-600 transition-colors duration-150">
-                                    <div class="text-xs text-gray-400 font-mono min-w-fit">
-                                        {{ msg.time }}
-                                    </div>
-                                    <div class="text-sm text-white font-mono break-all flex-1">
-                                        {{ msg.payload }}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div v-if="received_messages.length > 10"
-                            class="text-xs text-gray-400 text-center mt-2 pt-2 border-t border-gray-600">
-                            Showing latest 10 of {{ received_messages.length }} messages
-                        </div>
-                    </div>
-                </transition>
-            </div>
-
-            <div class="mt-2">
-                <button @click="show_mqtt_info = true"
-                    class="w-full text-center text-xs text-gray-500 hover:text-gray-700 transition-colors duration-150">
-                    <div class="flex items-center justify-center gap-1">
-                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        MQTT Configuration Info
-                    </div>
+                <button @click="handleConnect"
+                    class="w-full py-4 rounded-2xl font-bold text-xs uppercase tracking-widest transition-all duration-300"
+                    :class="[webhidConnected ? 'bg-green-500/10 text-green-400 border border-green-500/30' : 'bg-white text-gray-900 hover:scale-[1.02] active:scale-95 shadow-lg']">
+                    {{ webhidConnected ? 'Board Ready' : 'Connect Your Board' }}
                 </button>
             </div>
+
+            <!-- 2. Template Selection Card -->
+            <div class="bg-gray-800/40 rounded-3xl p-5 border border-white/5">
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="p-1.5 bg-orange-500/20 text-orange-400 rounded-lg">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                        </svg>
+                    </div>
+                    <span class="text-xs font-bold uppercase tracking-widest text-gray-300">Template Setup</span>
+                </div>
+
+                <div class="space-y-5">
+                    <div class="space-y-2">
+                        <label class="text-[10px] font-bold text-gray-500 uppercase ml-1">Your Channel</label>
+                        <input v-model.number="channel" type="number" placeholder="Enter channel number" @wheel="blurInput"
+                            class="w-full px-4 py-3 bg-gray-900/50 rounded-xl border border-white/5 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 outline-none transition-all text-sm font-semibold no-spinner" />
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-4">
+                        <div v-for="(_, key) in programConfig" :key="key" class="space-y-2">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase ml-1">
+                                {{ key.replace('Wait', ' Delay') }} (ms)
+                            </label>
+                            <input v-model.number="programConfig[key]" type="number" @wheel="blurInput"
+                                class="w-full px-4 py-3 bg-gray-900/50 rounded-xl border border-white/5 focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/50 outline-none transition-all text-sm font-semibold no-spinner" />
+                        </div>
+                    </div>
+
+                    <button @click="downloadTemplateProgram"
+                        :disabled="!channel"
+                        class="w-full py-4 mt-2 rounded-2xl bg-orange-500 text-white font-bold text-xs uppercase tracking-widest hover:bg-orange-600 transition-all disabled:opacity-20 shadow-lg shadow-orange-900/20 active:scale-95">
+                        Download Template
+                    </button>
+                </div>
+            </div>
+
+            <!-- 3. WiFi Card -->
+            <div class="bg-gray-800/40 rounded-3xl p-5 border border-white/5">
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="p-1.5 bg-blue-500/20 text-blue-400 rounded-lg">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
+                        </svg>
+                    </div>
+                    <span class="text-xs font-bold uppercase tracking-widest text-gray-300">WiFi connection</span>
+                </div>
+
+                <div class="space-y-5">
+                    <div class="space-y-2">
+                        <label class="text-[10px] font-bold text-gray-500 uppercase ml-1">WiFi Name</label>
+                        <input v-model="wifiConfig.ssid" type="text" placeholder="SSID"
+                            class="w-full px-4 py-3 bg-gray-900/50 rounded-xl border border-white/5 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 outline-none transition-all text-sm font-semibold" />
+                    </div>
+
+                    <div class="space-y-2">
+                        <label class="text-[10px] font-bold text-gray-500 uppercase ml-1">Password</label>
+                        <div class="relative">
+                            <input :type="showPassword ? 'text' : 'password'" v-model="wifiConfig.password" placeholder="••••••••"
+                                class="w-full px-4 py-3 bg-gray-900/50 rounded-xl border border-white/5 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 outline-none transition-all text-sm font-semibold" />
+                            <button @click="showPassword = !showPassword" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-600 hover:text-blue-400 transition-colors">
+                                <svg v-if="showPassword" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" /></svg>
+                                <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <button @click="sendWifiConfig" :disabled="!wifiConfig.ssid"
+                        class="w-full py-4 mt-2 rounded-2xl border-2 border-blue-500/30 text-blue-400 font-bold text-xs uppercase tracking-widest hover:bg-blue-500 hover:text-white transition-all active:scale-95 disabled:opacity-20">
+                        Update Settings
+                    </button>
+                </div>
+            </div>
+            
+            <!-- MQTT Info Button -->
+            <button @click="show_mqtt_info = true"
+                class="w-full flex items-center justify-center gap-2 py-3 text-[10px] font-bold text-gray-600 uppercase tracking-widest hover:text-gray-400 transition-colors">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                Help & MQTT Details
+            </button>
         </div>
 
         <transition name="fade">
@@ -329,27 +366,47 @@ const isValidNumber = (value: number, min = 0, max = 10000) => {
                 </div>
             </div>
         </transition>
-
-        <!-- Notification Toast -->
-        <transition name="fade">
-            <div v-if="notification"
-                class="fixed bottom-4 right-4 z-50 px-6 py-3 rounded-lg shadow-xl text-white font-medium flex items-center gap-3"
-                :class="{
-                    'bg-green-600': notification.type === 'success',
-                    'bg-blue-600': notification.type === 'info',
-                    'bg-red-600': notification.type === 'error'
-                }">
-                <svg v-if="notification.type === 'success'" class="w-5 h-5" fill="none" stroke="currentColor"
-                    viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                </svg>
-                <span>{{ notification.message }}</span>
-            </div>
-        </transition>
     </div>
 </template>
 
 <style scoped>
+/* Hide scroll-to-change and numeric spinners */
+.no-spinner::-webkit-inner-spin-button,
+.no-spinner::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.no-spinner {
+    -moz-appearance: textfield;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #374151;
+    border-radius: 10px;
+}
+
+.slide-enter-active,
+.slide-leave-active {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+}
+
+.slide-enter-from,
+.slide-leave-to {
+    opacity: 0;
+    height: 0 !important;
+    transform: translateY(10px);
+}
+
 .fade-enter-active,
 .fade-leave-active {
     transition: all 0.2s ease;
