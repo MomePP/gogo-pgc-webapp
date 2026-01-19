@@ -238,12 +238,18 @@ const blurInput = (e: Event) => {
             <div class="bg-gray-800/40 rounded-3xl p-5 border border-white/5 shadow-sm">
                 <div class="flex items-center gap-3 mb-4">
                     <div class="size-2 rounded-full shadow-[0_0_8px_rgba(255,255,255,0.5)]" :class="webhidConnected ? 'bg-green-400' : 'bg-red-400'"></div>
-                    <span class="text-xs font-bold uppercase tracking-widest text-gray-300">Board Status</span>
+                    <div class="px-2 py-0.5 bg-gray-700 rounded text-[10px] font-bold text-gray-400">Step 1</div>
+                    <span class="text-xs font-bold uppercase tracking-widest text-gray-300">Robot Connection</span>
                 </div>
+                
+                <p class="text-[11px] text-gray-400 mb-3 leading-relaxed">
+                    Start by connecting your robot to the computer via <span class="text-white font-bold">USB Cable</span>.
+                </p>
+
                 <button @click="handleConnect"
                     class="w-full py-4 rounded-2xl font-bold text-xs uppercase tracking-widest transition-all duration-300"
                     :class="[webhidConnected ? 'bg-green-500/10 text-green-400 border border-green-500/30' : 'bg-white text-gray-900 hover:scale-[1.02] active:scale-95 shadow-lg']">
-                    {{ webhidConnected ? 'Board Ready' : 'Connect Your Board' }}
+                    {{ webhidConnected ? 'Robot Connected' : 'Connect to Robot' }}
                 </button>
             </div>
 
@@ -255,7 +261,8 @@ const blurInput = (e: Event) => {
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                         </svg>
                     </div>
-                    <span class="text-xs font-bold uppercase tracking-widest text-gray-300">Template Setup</span>
+                    <div class="px-2 py-0.5 bg-gray-700 rounded text-[10px] font-bold text-gray-400">Step 3</div>
+                    <span class="text-xs font-bold uppercase tracking-widest text-gray-300">Configure Robot</span>
                 </div>
 
                 <div class="space-y-5">
@@ -278,7 +285,7 @@ const blurInput = (e: Event) => {
                     <button @click="downloadTemplateProgram"
                         :disabled="!channel"
                         class="w-full py-4 mt-2 rounded-2xl bg-orange-500 text-white font-bold text-xs uppercase tracking-widest hover:bg-orange-600 transition-all disabled:opacity-20 shadow-lg shadow-orange-900/20 active:scale-95">
-                        Download Template
+                        Configure Robot
                     </button>
                 </div>
             </div>
@@ -291,6 +298,7 @@ const blurInput = (e: Event) => {
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
                         </svg>
                     </div>
+                    <div class="px-2 py-0.5 bg-gray-700 rounded text-[10px] font-bold text-gray-400">Step 2</div>
                     <span class="text-xs font-bold uppercase tracking-widest text-gray-300">WiFi connection</span>
                 </div>
 

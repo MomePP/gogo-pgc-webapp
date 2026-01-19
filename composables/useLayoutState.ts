@@ -1,6 +1,6 @@
 import { ref } from 'vue';
 
-export const isSidebarCollapsed = ref(true);
+export const isSidebarCollapsed = ref(false);
 export const toggleSidebar = () => {
     isSidebarCollapsed.value = !isSidebarCollapsed.value;
 };
