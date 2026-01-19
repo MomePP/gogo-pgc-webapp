@@ -20,6 +20,7 @@ const wifiConfig = ref({
 
 const isWifiExpanded = ref(false)
 const isStep3Expanded = ref(false)
+const showChannelInfo = ref(false)
 
 const programConfig = ref({
     playbackWait: 500, // milliseconds
@@ -198,10 +199,6 @@ const sendWifiConfig = async () => {
         await sendReport.value(beepCmd)
 
         notify('WiFi configuration sent! Check the Wifi status on the GoGo Board\'s screen', 'success')
-        
-        // Chain Step 3: Configure Robot (to apply Channel and Program settings)
-        await downloadTemplateProgram()
-
     } catch (error) {
         notify('Failed to send WiFi configuration.', 'error')
     }
@@ -210,6 +207,16 @@ const sendWifiConfig = async () => {
 const isValidNumber = (value: number, min = 0, max = 10000) => {
     return !isNaN(value) && value >= min && value <= max
 };
+
+const handleConfigureRobot = async () => {
+    // Step 2 Action (Conditional): only if SSID is provided
+    if (wifiConfig.value.ssid) {
+        await sendWifiConfig()
+    }
+    
+    // Step 3 Action (Always)
+    await downloadTemplateProgram()
+}
 
 const randomizeChannel = () => {
     // Generate a number between 10000 and 99999
@@ -232,7 +239,7 @@ const blurInput = (e: Event) => {
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
                 </div>
-                <h2 class="text-sm font-black uppercase tracking-widest text-gray-400">Control Center</h2>
+                <h2 class="text-sm font-black uppercase tracking-widest text-gray-400">Robot Settings</h2>
             </div>
             <button @click="toggleSidebar" class="p-2 hover:bg-white/10 rounded-full text-gray-500 transition-colors">
                 <svg v-if="!isSidebarCollapsed" class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -307,21 +314,27 @@ const blurInput = (e: Event) => {
                         </div>
 
                         <div class="space-y-2">
-                            <label class="text-[10px] font-bold text-gray-500 uppercase ml-1">Your Channel Number</label>
+                            <div class="flex items-center gap-1">
+                                <label class="text-[10px] font-bold text-gray-500 uppercase ml-1">Your Channel Number</label>
+                                <button @click="showChannelInfo = !showChannelInfo" class="text-gray-500 hover:text-blue-400 transition-colors">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                </button>
+                            </div>
                             <div class="flex gap-2">
-                                <input v-model.number="channel" type="number" placeholder="Pick a number" @wheel="blurInput"
+                                <input v-model="channel" type="number" placeholder="Pick a number" @wheel="blurInput"
                                     class="w-full px-4 py-3 bg-gray-900/50 rounded-xl border border-white/5 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 outline-none transition-all text-sm font-semibold no-spinner" />
                                 <button @click="randomizeChannel" 
                                     class="px-4 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl text-gray-300 font-bold text-xs uppercase tracking-wider transition-colors">
                                     Randomize
                                 </button>
                             </div>
+                            <!-- Tip Message -->
+                            <transition name="fade">
+                                <p v-if="showChannelInfo" class="text-xs text-blue-300 bg-blue-500/10 p-2 rounded-lg border border-blue-500/20">
+                                    This number is used to send and receive block code. Please remember it.
+                                </p>
+                            </transition>
                         </div>
-
-                        <button @click="sendWifiConfig" :disabled="!wifiConfig.ssid"
-                            class="w-full py-4 mt-2 rounded-2xl border-2 border-blue-500/30 text-blue-400 font-bold text-xs uppercase tracking-widest hover:bg-blue-500 hover:text-white transition-all active:scale-95 disabled:opacity-20">
-                            Update Settings
-                        </button>
                     </div>
                 </transition>
             </div>
@@ -366,14 +379,15 @@ const blurInput = (e: Event) => {
                             </div>
                         </div>
                     </transition>
-
-                    <button @click="downloadTemplateProgram"
-                        :disabled="!webhidConnected"
-                        class="w-full py-4 mt-2 rounded-2xl bg-orange-500 text-white font-bold text-xs uppercase tracking-widest hover:bg-orange-600 transition-all disabled:opacity-20 disabled:cursor-not-allowed shadow-lg shadow-orange-900/20 active:scale-95">
-                        {{ webhidConnected ? 'Configure Robot' : 'Connect Robot First' }}
-                    </button>
                 </div>
             </div>
+
+            <!-- Configure Robot Button (Moved outside Step 3) -->
+            <button @click="handleConfigureRobot"
+                :disabled="!webhidConnected"
+                class="w-full py-4 rounded-2xl bg-orange-500 text-white font-bold text-xs uppercase tracking-widest hover:bg-orange-600 transition-all disabled:opacity-20 disabled:cursor-not-allowed shadow-lg shadow-orange-900/20 active:scale-95">
+                {{ webhidConnected ? 'Configure Robot' : 'Connect Robot First' }}
+            </button>
             
             <!-- MQTT Info Button -->
             <button @click="show_mqtt_info = true"
