@@ -331,7 +331,7 @@ const blurInput = (e: Event) => {
                             <!-- Tip Message -->
                             <transition name="fade">
                                 <p v-if="showChannelInfo" class="text-xs text-blue-300 bg-blue-500/10 p-2 rounded-lg border border-blue-500/20">
-                                    This number is used to send and receive block code. Please remember it.
+                                    Use this number to send and receive block code on the right panel. Don’t forget it.
                                 </p>
                             </transition>
                         </div>
