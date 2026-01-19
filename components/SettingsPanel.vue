@@ -5,7 +5,7 @@ import { generateLogoCode } from '~/utils/logoGenerator';
 import { isSidebarCollapsed, toggleSidebar, notify } from '~/composables/useLayoutState';
 
 const { $mqtt } = useNuxtApp()
-const { channel } = useMqttConnection()
+const { channel, connectChannel } = useMqttConnection()
 const remoteTopic = ref(useRuntimeConfig().public.mqttRemoteTopic || "")
 const { webhidConnected, connect, disconnect, isSupported, sendReport } = useWebHID()
 
@@ -204,11 +204,24 @@ const sendWifiConfig = async () => {
     }
 };
 
-const isValidNumber = (value: number, min = 0, max = 10000) => {
-    return !isNaN(value) && value >= min && value <= max
-};
+// Initialize local channel state
+const localChannel = ref(channel.value)
+
+// Watch for global channel changes to sync back to local (e.g. if changed from Footer)
+watch(channel, (newVal) => {
+    // Only update if differ to avoid cursor jumping or loops (though string/number conversion might be tricky, checking strict equality)
+    if (newVal !== localChannel.value) {
+        localChannel.value = newVal
+    }
+})
 
 const handleConfigureRobot = async () => {
+    // Commit local channel to global state when configuring
+    channel.value = localChannel.value
+    
+    // Auto-connect to MQTT
+    await connectChannel()
+
     // Step 2 Action (Conditional): only if SSID is provided
     if (wifiConfig.value.ssid) {
         await sendWifiConfig()
@@ -220,7 +233,7 @@ const handleConfigureRobot = async () => {
 
 const randomizeChannel = () => {
     // Generate a number between 10000 and 99999
-    channel.value = Math.floor(10000 + Math.random() * 90000).toString();
+    localChannel.value = Math.floor(10000 + Math.random() * 90000).toString();
 };
 
 const blurInput = (e: Event) => {
@@ -321,7 +334,7 @@ const blurInput = (e: Event) => {
                                 </button>
                             </div>
                             <div class="flex gap-2">
-                                <input v-model="channel" type="number" placeholder="Pick a number" @wheel="blurInput"
+                                <input v-model="localChannel" type="number" placeholder="Pick a number" @wheel="blurInput"
                                     class="w-full px-4 py-3 bg-gray-900/50 rounded-xl border border-white/5 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 outline-none transition-all text-sm font-semibold no-spinner" />
                                 <button @click="randomizeChannel" 
                                     class="px-4 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl text-gray-300 font-bold text-xs uppercase tracking-wider transition-colors">

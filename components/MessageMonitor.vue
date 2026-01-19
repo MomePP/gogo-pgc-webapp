@@ -1,13 +1,40 @@
 <script setup lang="ts">
 import { useMqttConnection } from '~/composables/useMqttConnection'
 
-const { is_connected } = useMqttConnection()
+const { is_connected, channel, connectChannel } = useMqttConnection()
 const { $mqtt } = useNuxtApp()
 
 const received_messages = ref<{ time: string; payload: string; id: number }[]>([])
 const isExpanded = ref(false)
 const newMessagePulse = ref(false) // Track animation state
 const remoteTopic = ref(useRuntimeConfig().public.mqttRemoteTopic || "")
+
+// Editing State
+const isEditing = ref(false)
+const localChannel = ref('')
+const channelInputRef = ref<HTMLInputElement | null>(null)
+
+const startEditing = (e: Event) => {
+    e.stopPropagation() // Prevent toggling dropdown
+    localChannel.value = channel.value
+    isEditing.value = true
+    isExpanded.value = false // Close dropdown if open
+    nextTick(() => {
+        channelInputRef.value?.focus()
+    })
+}
+
+const saveChannel = async (e?: Event) => {
+    if (e) e.stopPropagation()
+    channel.value = localChannel.value
+    await connectChannel()
+    isEditing.value = false
+}
+
+const cancelEditing = (e: Event) => {
+    e.stopPropagation()
+    isEditing.value = false
+}
 
 const clearMessages = (e: Event) => {
     e.stopPropagation() // Prevent toggling the collapse when clicking clear
@@ -41,31 +68,58 @@ watch(isExpanded, () => {
 <template>
     <div class="relative">
         <!-- Floating Pill -->
-        <div @click="isExpanded = !isExpanded" :class="[
-            'bg-white rounded-full shadow-lg border border-gray-100 px-4 py-2 flex items-center gap-3 cursor-pointer hover:bg-gray-50 transition-all select-none',
+        <div @click="!isEditing && (isExpanded = !isExpanded)" :class="[
+            'bg-white rounded-full shadow-lg border border-gray-100 px-4 py-2 flex items-center gap-3 cursor-pointer hover:bg-gray-50 transition-all select-none h-[42px]',
             { 'noti-pulse': newMessagePulse && !isExpanded }
         ]">
 
-            <div class="flex items-center gap-2 shrink-0">
-                <!-- Only CLOUD Status Pill remains -->
-                <div :class="[
-                    is_connected ? 'bg-green-50 text-green-700 border-green-100' : 'bg-gray-50 text-gray-400 border-gray-100',
-                    'px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1.5 border transition-colors'
-                ]">
-                    <span class="w-1.5 h-1.5 rounded-full" :class="is_connected ? 'bg-green-500' : 'bg-gray-300'"></span>
-                    CLOUD
-                </div>
+            <!-- Edit Mode -->
+            <div v-if="isEditing" class="flex items-center gap-2" @click.stop>
+                <input 
+                    ref="channelInputRef"
+                    v-model="localChannel" 
+                    type="number"
+                    class="w-24 bg-gray-50 border border-gray-200 rounded px-2 py-0.5 text-sm font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Channel"
+                    @keyup.enter="saveChannel"
+                    @keyup.esc="cancelEditing"
+                    @blur="saveChannel"
+                />
+                <button @click="saveChannel" class="text-green-600 hover:text-green-700">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" /></svg>
+                </button>
             </div>
-            
-            <span class="text-sm font-bold text-gray-700 tracking-tight whitespace-nowrap">Activity Feed</span>
 
-            <!-- Count badge with its own heart-beat animation -->
-            <transition name="pop">
-                <div v-if="received_messages.length > 0" :key="received_messages.length"
-                    class="bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold shadow-sm shadow-blue-200">
-                    {{ received_messages.length }}
+            <!-- Display Mode -->
+            <template v-else>
+                <!-- Dot Indicator (No Text) -->
+                <div class="flex items-center justify-center">
+                     <span class="w-2.5 h-2.5 rounded-full shadow-sm ring-1 ring-white" :class="is_connected ? 'bg-green-500' : 'bg-gray-300'"></span>
                 </div>
-            </transition>
+
+                <!-- Channel Info -->
+                <div class="flex items-center gap-2 group px-1">
+                    <div class="flex flex-col items-start leading-none gap-0.5">
+                        <span class="text-[9px] uppercase font-extrabold text-gray-400 tracking-wider">Channel</span>
+                        <span class="text-base font-black text-gray-800 font-mono tracking-tight">{{ channel || '...' }}</span>
+                    </div>
+                    
+                    <!-- Edit Icon (Visual Cue) -->
+                    <button @click="startEditing" class="p-1 rounded-full hover:bg-gray-200 text-gray-400 hover:text-blue-500 transition-colors">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Message Count Badge -->
+                <transition name="pop">
+                    <div v-if="received_messages.length > 0" :key="received_messages.length"
+                        class="bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold shadow-sm shadow-blue-200">
+                        {{ received_messages.length }}
+                    </div>
+                </transition>
+            </template>
         </div>
 
         <!-- Dropdown Card -->

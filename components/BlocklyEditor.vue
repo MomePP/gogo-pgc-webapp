@@ -25,6 +25,21 @@ const generatedCode = ref('');
 let workspace = Blockly.WorkspaceSvg;
 let gogoGenerator = null;
 
+// Local channel state to decouple input from global state
+const localChannel = ref(channel.value);
+
+// Watch for global channel changes (e.g. from Settings Panel)
+watch(channel, (newVal) => {
+    if (newVal !== localChannel.value) {
+        localChannel.value = newVal;
+    }
+});
+
+const handleConnect = () => {
+    channel.value = localChannel.value;
+    connectChannel();
+}
+
 let lastActiveBlock = null; // Track the last block used (from MQTT or user)
 
 class BiMap {
@@ -331,7 +346,7 @@ const controlDownload = () => {
 
     if (channel.value === "") {
         console.log("⚠️ Channel is empty.");
-        return;
+        return false;
     }
     // console.log(`👀 Generated code\n\n${generatedCode.value}`);
 
@@ -362,7 +377,7 @@ const controlDownload = () => {
     }
     if (commands.length == 0) {
         console.log("⚠️ Commands is empty.");
-        return;
+        return false;
     }
 
     // INFO: generate command packet, repeat count is 4-digit prefix
@@ -372,6 +387,7 @@ const controlDownload = () => {
     const topic = blocklyTopic.value + channel.value;
     $mqtt.publish(topic, commandPacket);
     console.log(`📩 [${channel.value}] sent: ${commandPacket}`);
+    return true; // Success
 };
 
 const controlRun = () => {
@@ -380,10 +396,37 @@ const controlRun = () => {
     console.log(`📩 [${channel.value}] sent: control run`);
 };
 
+const isSending = ref(false);
+const isStopping = ref(false);
+
+const handleRunCode = () => {
+    if (isSending.value) return;
+    isSending.value = true;
+
+    // 1. Send Code
+    const sent = controlDownload();
+    
+    // 2. If sent successfully, wait briefly then Run
+    if (sent) {
+        setTimeout(() => {
+            controlRun();
+            // Keep feedback visible slightly longer for better UX
+            setTimeout(() => { isSending.value = false; }, 300);
+        }, 200);
+    } else {
+        isSending.value = false;
+    }
+}
+
 const controlStop = () => {
+    if (isStopping.value) return;
+    isStopping.value = true;
+
     const topic = controlTopic.value + channel.value;
     $mqtt.publish(topic, 'stop');
     console.log(`📩 [${channel.value}] sent: control stop`);
+
+    setTimeout(() => { isStopping.value = false; }, 400);
 };
 </script>
 
@@ -432,43 +475,33 @@ const controlStop = () => {
         <!-- Footer / Control Panel -->
         <footer class="w-full px-6 py-4 bg-white border-t border-gray-100 z-20 flex items-center relative">
             <div class="flex items-center gap-4">
-                <div class="flex items-center gap-2">
-                    <label class="text-base font-medium text-gray-700">Channel:</label>
-                    <input v-model="channel" placeholder="Enter channel" @keyup.enter="connectChannel"
-                        class="w-36 px-4 py-2 text-base font-medium border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 hover:bg-gray-100 transition-colors duration-150" />
-                </div>
-                <button @click="connectChannel" :disabled="is_connected" :class="[
-                    'px-6 py-2 text-base font-medium rounded-full transition-colors duration-150 whitespace-nowrap',
-                    is_connected
-                        ? 'bg-green-50 text-green-700 border border-green-200 cursor-not-allowed'
-                        : 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500'
-                ]">
-                    {{ is_connected ? 'Connected' : 'Connect' }}
-                </button>
+                <!-- Channel controls moved to MessageMonitor -->
             </div>
             <div class="flex items-center gap-2 ml-auto">
-                <button @click="controlRun"
-                    class='flex items-center size-10 justify-center rounded-full transition-colors duration-150 bg-green-100 text-green-700 border border-green-300 hover:bg-green-200 hover:border-green-400'>
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" stroke-width="2"
-                        stroke="currentColor" class="size-5">
-                        <path stroke-linecap="round" stroke-linejoin="round"
-                            d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" />
+                <button @click="handleRunCode" :disabled="isSending || isStopping"
+                    class='flex items-center gap-2 px-6 py-2 text-base font-bold rounded-full transition-all duration-150 shadow-sm'
+                    :class="isSending ? 'bg-green-50 text-green-400 border border-green-100 cursor-not-allowed' : 'bg-green-100 text-green-700 border border-green-300 hover:bg-green-200 hover:border-green-400'">
+                    
+                    <svg v-if="isSending" class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
+                    <svg v-else xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" />
+                    </svg>
+                    <span>{{ isSending ? 'Sending...' : 'Run Code' }}</span>
                 </button>
-                <button @click="controlStop"
-                    class='flex items-center size-10 justify-center rounded-full transition-colors duration-150 bg-red-100 text-red-700 border border-red-300 hover:bg-red-200 hover:border-red-400'>
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" class="size-5">
+                
+                <button @click="controlStop" :disabled="isStopping"
+                    class='flex items-center size-10 justify-center rounded-full transition-all duration-150 border'
+                    :class="isStopping ? 'bg-red-50 text-red-300 border-red-100 cursor-not-allowed scale-95' : 'bg-red-100 text-red-700 border-red-300 hover:bg-red-200 hover:border-red-400'">
+                    <svg v-if="isStopping" class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <svg v-else xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" class="size-5">
                         <rect x="5" y="5" width="14" height="14" rx="2" />
                     </svg>
-                </button>
-                <button @click="controlDownload"
-                    class='flex items-center gap-2 px-4 py-2 text-base font-medium rounded-full transition-colors duration-150 bg-blue-100 text-blue-700 border border-blue-300 hover:bg-blue-200 hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500'>
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
-                        stroke="currentColor" class="size-5">
-                        <path stroke-linecap="round" stroke-linejoin="round"
-                            d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                    </svg>
-                    Send Code
                 </button>
             </div>
         </footer>
