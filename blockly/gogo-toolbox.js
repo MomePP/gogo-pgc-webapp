@@ -1,12 +1,10 @@
 export default `
 <xml>
-    <category name="Movement" categorystyle="movement_category">
-        <block type="movement_forward"></block>
-        <block type="movement_backward"></block>
-        <block type="movement_left"></block>
-        <block type="movement_right"></block>
-        <block type="movement_stop"></block>
-    </category>
+    <block type="movement_forward"></block>
+    <block type="movement_backward"></block>
+    <block type="movement_left"></block>
+    <block type="movement_right"></block>
+    <block type="movement_stop"></block>
 
 <!-- 
     <category name="Time" categorystyle="time_category">
