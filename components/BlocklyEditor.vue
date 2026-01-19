@@ -443,7 +443,7 @@ const controlStop = () => {
                         ? 'bg-green-50 text-green-700 border border-green-200 cursor-not-allowed'
                         : 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500'
                 ]">
-                    {{ is_connected ? 'Connected' : 'Connect Cloud' }}
+                    {{ is_connected ? 'Connected' : 'Connect' }}
                 </button>
             </div>
             <div class="flex items-center gap-2 ml-auto">
