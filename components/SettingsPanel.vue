@@ -18,6 +18,9 @@ const wifiConfig = ref({
     password: ''
 })
 
+const isWifiExpanded = ref(false)
+const isStep3Expanded = ref(false)
+
 const programConfig = ref({
     playbackWait: 500, // milliseconds
     turnWait: 200,    // milliseconds  
@@ -42,7 +45,7 @@ onMounted(() => {
 
 const generateProgramSettings = () => {
     return {
-        channel: channel.value,
+        channel: String(channel.value || 0),
         playbackWait: programConfig.value.playbackWait,
         turnWait: programConfig.value.turnWait,
         moveWait: programConfig.value.moveWait,
@@ -194,7 +197,11 @@ const sendWifiConfig = async () => {
         beepCmd[2] = 11
         await sendReport.value(beepCmd)
 
-        notify('WiFi configuration sent!', 'success')
+        notify('WiFi configuration sent! Check the Wifi status on the GoGo Board\'s screen', 'success')
+        
+        // Chain Step 3: Configure Robot (to apply Channel and Program settings)
+        await downloadTemplateProgram()
+
     } catch (error) {
         notify('Failed to send WiFi configuration.', 'error')
     }
@@ -202,6 +209,11 @@ const sendWifiConfig = async () => {
 
 const isValidNumber = (value: number, min = 0, max = 10000) => {
     return !isNaN(value) && value >= min && value <= max
+};
+
+const randomizeChannel = () => {
+    // Generate a number between 10000 and 99999
+    channel.value = Math.floor(10000 + Math.random() * 90000).toString();
 };
 
 const blurInput = (e: Event) => {
@@ -236,10 +248,13 @@ const blurInput = (e: Event) => {
         <div class="flex-1 overflow-y-auto space-y-6 pr-1 min-h-0 custom-scrollbar pb-8">
             <!-- 1. Device Status Card -->
             <div class="bg-gray-800/40 rounded-3xl p-5 border border-white/5 shadow-sm">
-                <div class="flex items-center gap-3 mb-4">
-                    <div class="size-2 rounded-full shadow-[0_0_8px_rgba(255,255,255,0.5)]" :class="webhidConnected ? 'bg-green-400' : 'bg-red-400'"></div>
-                    <div class="px-2 py-0.5 bg-gray-700 rounded text-[10px] font-bold text-gray-400">Step 1</div>
-                    <span class="text-xs font-bold uppercase tracking-widest text-gray-300">Robot Connection</span>
+                <div class="flex items-center gap-4 mb-4">
+                    <span class="text-4xl font-black opacity-50 select-none leading-none" 
+                        :class="webhidConnected ? 'text-green-500' : 'text-red-500'">1</span>
+                    <div class="flex items-center gap-3">
+                        <div class="size-2 rounded-full shadow-[0_0_8px_rgba(255,255,255,0.5)]" :class="webhidConnected ? 'bg-green-400' : 'bg-red-400'"></div>
+                        <span class="text-xs font-bold uppercase tracking-widest text-gray-300">Robot Connection</span>
+                    </div>
                 </div>
                 
                 <p class="text-[11px] text-gray-400 mb-3 leading-relaxed">
@@ -253,77 +268,109 @@ const blurInput = (e: Event) => {
                 </button>
             </div>
 
-            <!-- 2. Template Selection Card -->
-            <div class="bg-gray-800/40 rounded-3xl p-5 border border-white/5">
-                <div class="flex items-center gap-3 mb-6">
-                    <div class="p-1.5 bg-orange-500/20 text-orange-400 rounded-lg">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                        </svg>
+            <!-- 2. WiFi Card -->
+            <div class="bg-gray-800/40 rounded-3xl overflow-hidden border border-white/5 transition-all duration-300"
+                :class="isWifiExpanded ? 'bg-gray-800/60 ring-1 ring-blue-500/20' : 'hover:bg-gray-800/60'">
+                <div @click="isWifiExpanded = !isWifiExpanded" 
+                    class="p-5 flex items-center justify-between cursor-pointer group select-none">
+                    <div class="flex items-center gap-4">
+                        <span class="text-4xl font-black text-blue-500/50 select-none leading-none">2</span>
+                        <span class="text-xs font-bold uppercase tracking-widest text-gray-300">
+                            WiFi connection <span class="text-gray-500 normal-case tracking-normal ml-1">(Optional)</span>
+                        </span>
                     </div>
-                    <div class="px-2 py-0.5 bg-gray-700 rounded text-[10px] font-bold text-gray-400">Step 3</div>
-                    <span class="text-xs font-bold uppercase tracking-widest text-gray-300">Configure Robot</span>
+                    <svg class="w-4 h-4 text-gray-500 transition-transform duration-300" 
+                        :class="isWifiExpanded ? 'rotate-180 text-blue-400' : ''"
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
                 </div>
 
-                <div class="space-y-5">
-                    <div class="space-y-2">
-                        <label class="text-[10px] font-bold text-gray-500 uppercase ml-1">Your Channel</label>
-                        <input v-model.number="channel" type="number" placeholder="Enter channel number" @wheel="blurInput"
-                            class="w-full px-4 py-3 bg-gray-900/50 rounded-xl border border-white/5 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 outline-none transition-all text-sm font-semibold no-spinner" />
-                    </div>
-
-                    <div class="grid grid-cols-1 gap-4">
-                        <div v-for="(_, key) in programConfig" :key="key" class="space-y-2">
-                            <label class="text-[10px] font-bold text-gray-500 uppercase ml-1">
-                                {{ key.replace('Wait', ' Delay') }} (ms)
-                            </label>
-                            <input v-model.number="programConfig[key]" type="number" @wheel="blurInput"
-                                class="w-full px-4 py-3 bg-gray-900/50 rounded-xl border border-white/5 focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/50 outline-none transition-all text-sm font-semibold no-spinner" />
+                <transition name="slide">
+                    <div v-if="isWifiExpanded" class="px-5 pb-5 space-y-5">
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase ml-1">WiFi Name</label>
+                            <input v-model="wifiConfig.ssid" type="text" placeholder="SSID"
+                                class="w-full px-4 py-3 bg-gray-900/50 rounded-xl border border-white/5 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 outline-none transition-all text-sm font-semibold" />
                         </div>
-                    </div>
 
-                    <button @click="downloadTemplateProgram"
-                        :disabled="!channel"
-                        class="w-full py-4 mt-2 rounded-2xl bg-orange-500 text-white font-bold text-xs uppercase tracking-widest hover:bg-orange-600 transition-all disabled:opacity-20 shadow-lg shadow-orange-900/20 active:scale-95">
-                        Configure Robot
-                    </button>
-                </div>
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase ml-1">Password</label>
+                            <div class="relative">
+                                <input :type="showPassword ? 'text' : 'password'" v-model="wifiConfig.password" placeholder="••••••••"
+                                    class="w-full px-4 py-3 bg-gray-900/50 rounded-xl border border-white/5 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 outline-none transition-all text-sm font-semibold" />
+                                <button @click="showPassword = !showPassword" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-600 hover:text-blue-400 transition-colors">
+                                    <svg v-if="showPassword" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" /></svg>
+                                    <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase ml-1">Your Channel Number</label>
+                            <div class="flex gap-2">
+                                <input v-model.number="channel" type="number" placeholder="Pick a number" @wheel="blurInput"
+                                    class="w-full px-4 py-3 bg-gray-900/50 rounded-xl border border-white/5 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 outline-none transition-all text-sm font-semibold no-spinner" />
+                                <button @click="randomizeChannel" 
+                                    class="px-4 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl text-gray-300 font-bold text-xs uppercase tracking-wider transition-colors">
+                                    Randomize
+                                </button>
+                            </div>
+                        </div>
+
+                        <button @click="sendWifiConfig" :disabled="!wifiConfig.ssid"
+                            class="w-full py-4 mt-2 rounded-2xl border-2 border-blue-500/30 text-blue-400 font-bold text-xs uppercase tracking-widest hover:bg-blue-500 hover:text-white transition-all active:scale-95 disabled:opacity-20">
+                            Update Settings
+                        </button>
+                    </div>
+                </transition>
             </div>
 
-            <!-- 3. WiFi Card -->
-            <div class="bg-gray-800/40 rounded-3xl p-5 border border-white/5">
-                <div class="flex items-center gap-3 mb-6">
-                    <div class="p-1.5 bg-blue-500/20 text-blue-400 rounded-lg">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
-                        </svg>
+            <!-- 3. Template Selection Card -->
+            <div class="bg-gray-800/40 rounded-3xl overflow-hidden border border-white/5 transition-all duration-300"
+                :class="isStep3Expanded ? 'bg-gray-800/60 ring-1 ring-orange-500/20' : 'hover:bg-gray-800/60'">
+                <div @click="isStep3Expanded = !isStep3Expanded"
+                    class="p-5 flex items-center justify-between cursor-pointer group select-none">
+                    <div class="flex items-center gap-4">
+                        <span class="text-4xl font-black text-orange-500/50 select-none leading-none">3</span>
+                        <span class="text-xs font-bold uppercase tracking-widest text-gray-300">Settings</span>
                     </div>
-                    <div class="px-2 py-0.5 bg-gray-700 rounded text-[10px] font-bold text-gray-400">Step 2</div>
-                    <span class="text-xs font-bold uppercase tracking-widest text-gray-300">WiFi connection</span>
+                    <svg class="w-4 h-4 text-gray-500 transition-transform duration-300"
+                        :class="isStep3Expanded ? 'rotate-180 text-orange-400' : ''"
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
                 </div>
 
-                <div class="space-y-5">
-                    <div class="space-y-2">
-                        <label class="text-[10px] font-bold text-gray-500 uppercase ml-1">WiFi Name</label>
-                        <input v-model="wifiConfig.ssid" type="text" placeholder="SSID"
-                            class="w-full px-4 py-3 bg-gray-900/50 rounded-xl border border-white/5 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 outline-none transition-all text-sm font-semibold" />
-                    </div>
+                <div class="px-5 pb-5 space-y-5">
+                    <transition name="slide">
+                        <div v-if="isStep3Expanded" class="space-y-4">
+                            <p class="text-[10px] text-gray-500 italic">Times are in milliseconds</p>
+                            
+                            <div class="space-y-2">
+                                <label class="text-[10px] font-bold text-gray-500 uppercase ml-1">Pause time between commands</label>
+                                <input v-model.number="programConfig.playbackWait" type="number" @wheel="blurInput"
+                                    class="w-full px-4 py-3 bg-gray-900/50 rounded-xl border border-white/5 focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/50 outline-none transition-all text-sm font-semibold no-spinner" />
+                            </div>
 
-                    <div class="space-y-2">
-                        <label class="text-[10px] font-bold text-gray-500 uppercase ml-1">Password</label>
-                        <div class="relative">
-                            <input :type="showPassword ? 'text' : 'password'" v-model="wifiConfig.password" placeholder="••••••••"
-                                class="w-full px-4 py-3 bg-gray-900/50 rounded-xl border border-white/5 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 outline-none transition-all text-sm font-semibold" />
-                            <button @click="showPassword = !showPassword" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-600 hover:text-blue-400 transition-colors">
-                                <svg v-if="showPassword" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" /></svg>
-                                <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                            </button>
+                            <div class="space-y-2">
+                                <label class="text-[10px] font-bold text-gray-500 uppercase ml-1">Turn duration</label>
+                                <input v-model.number="programConfig.turnWait" type="number" @wheel="blurInput"
+                                    class="w-full px-4 py-3 bg-gray-900/50 rounded-xl border border-white/5 focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/50 outline-none transition-all text-sm font-semibold no-spinner" />
+                            </div>
+
+                            <div class="space-y-2">
+                                <label class="text-[10px] font-bold text-gray-500 uppercase ml-1">Move duration</label>
+                                <input v-model.number="programConfig.moveWait" type="number" @wheel="blurInput"
+                                    class="w-full px-4 py-3 bg-gray-900/50 rounded-xl border border-white/5 focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/50 outline-none transition-all text-sm font-semibold no-spinner" />
+                            </div>
                         </div>
-                    </div>
+                    </transition>
 
-                    <button @click="sendWifiConfig" :disabled="!wifiConfig.ssid"
-                        class="w-full py-4 mt-2 rounded-2xl border-2 border-blue-500/30 text-blue-400 font-bold text-xs uppercase tracking-widest hover:bg-blue-500 hover:text-white transition-all active:scale-95 disabled:opacity-20">
-                        Update Settings
+                    <button @click="downloadTemplateProgram"
+                        :disabled="!webhidConnected"
+                        class="w-full py-4 mt-2 rounded-2xl bg-orange-500 text-white font-bold text-xs uppercase tracking-widest hover:bg-orange-600 transition-all disabled:opacity-20 disabled:cursor-not-allowed shadow-lg shadow-orange-900/20 active:scale-95">
+                        {{ webhidConnected ? 'Configure Robot' : 'Connect Robot First' }}
                     </button>
                 </div>
             </div>
