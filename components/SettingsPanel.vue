@@ -383,10 +383,10 @@ const blurInput = (e: Event) => {
                         </transition>
 
                         <div class="flex gap-3 items-stretch">
-                            <input v-model="localChannel" type="number" placeholder="Channel" @wheel="blurInput"
-                                class="flex-1 min-w-0 px-4 py-4 bg-gray-900/70 rounded-2xl border-2 border-blue-500/40 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/30 outline-none transition-all text-2xl font-black text-center tracking-widest text-white no-spinner" />
+                            <input v-model="localChannel" type="number" placeholder="Robot ID" @wheel="blurInput"
+                                class="flex-1 min-w-0 px-4 py-3 bg-gray-900/50 rounded-xl border border-white/5 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 outline-none transition-all text-lg font-bold text-center text-white no-spinner tracking-wide" />
                             <button @click="randomizeChannel"
-                                class="px-4 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 rounded-2xl text-blue-300 hover:text-blue-200 transition-all flex items-center justify-center flex-shrink-0"
+                                class="px-3 bg-blue-500/20 hover:bg-blue-500/30 border border-white/5 rounded-xl text-blue-300 hover:text-blue-200 transition-all flex items-center justify-center flex-shrink-0"
                                 title="Randomize">
                                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
