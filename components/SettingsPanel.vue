@@ -42,6 +42,16 @@ onMounted(() => {
             })
         }
     })
+
+    // Initialize channel: load from localStorage or randomize
+    const savedChannel = localStorage.getItem('gogo_mqtt_channel')
+    if (savedChannel) {
+        localChannel.value = savedChannel
+        channel.value = savedChannel
+    } else {
+        // Randomize if no saved channel
+        localChannel.value = Math.floor(10000 + Math.random() * 90000).toString()
+    }
 });
 
 const generateProgramSettings = () => {

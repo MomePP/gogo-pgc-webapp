@@ -142,7 +142,7 @@ to playback
             break
         ]
 
-        repeat (textlength commands)
+        repeat ((textlength commands) - 4)
         [
             if not is_playback
             [

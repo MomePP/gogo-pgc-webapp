@@ -125,7 +125,8 @@ onMounted(() => {
             maxScale: 2,
             minScale: 0.3,
             scaleSpeed: 1.2
-        }
+        },
+        trashcan: true
     });
 
     initWorkspace()
