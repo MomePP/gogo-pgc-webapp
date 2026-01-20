@@ -599,7 +599,7 @@ const handleSeparate = () => {
                 @click="handleCombine"
             >
                 <svg class="combine-popup-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8l4 4-4 4m16-8l-4 4 4 4" />
                 </svg>
                 Combine
             </button>
