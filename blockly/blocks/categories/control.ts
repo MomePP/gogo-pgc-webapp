@@ -74,7 +74,7 @@ export default function (Blockly: any) {
         {
             type: 'movement_forward_combined',
             message0: 'forward x%1',
-            args0: [{ type: 'field_number', name: 'COUNT', value: 2, min: 2, max: 99 }],
+            args0: [{ type: 'field_number', name: 'COUNT', value: 2, min: 2, max: 99, precision: 1 }],
             previousStatement: true,
             nextStatement: true,
             colour: '#66D9A6',
@@ -84,7 +84,7 @@ export default function (Blockly: any) {
         {
             type: 'movement_backward_combined',
             message0: 'backward x%1',
-            args0: [{ type: 'field_number', name: 'COUNT', value: 2, min: 2, max: 99 }],
+            args0: [{ type: 'field_number', name: 'COUNT', value: 2, min: 2, max: 99, precision: 1 }],
             previousStatement: true,
             nextStatement: true,
             colour: '#FF8A95',
@@ -94,7 +94,7 @@ export default function (Blockly: any) {
         {
             type: 'movement_left_combined',
             message0: 'turn left x%1',
-            args0: [{ type: 'field_number', name: 'COUNT', value: 2, min: 2, max: 99 }],
+            args0: [{ type: 'field_number', name: 'COUNT', value: 2, min: 2, max: 99, precision: 1 }],
             previousStatement: true,
             nextStatement: true,
             colour: '#A996D4',
@@ -104,7 +104,7 @@ export default function (Blockly: any) {
         {
             type: 'movement_right_combined',
             message0: 'turn right x%1',
-            args0: [{ type: 'field_number', name: 'COUNT', value: 2, min: 2, max: 99 }],
+            args0: [{ type: 'field_number', name: 'COUNT', value: 2, min: 2, max: 99, precision: 1 }],
             previousStatement: true,
             nextStatement: true,
             colour: '#FFA04A',
@@ -114,7 +114,7 @@ export default function (Blockly: any) {
         {
             type: 'movement_beep_combined',
             message0: 'beep x%1',
-            args0: [{ type: 'field_number', name: 'COUNT', value: 2, min: 2, max: 99 }],
+            args0: [{ type: 'field_number', name: 'COUNT', value: 2, min: 2, max: 99, precision: 1 }],
             previousStatement: true,
             nextStatement: true,
             colour: '#FFCA28',

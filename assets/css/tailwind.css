@@ -72,3 +72,14 @@
     width: 16px;
     height: 16px;
 }
+
+/* Limit combined block COUNT input to 2 digits */
+.blocklyHtmlInput[data-field-type="number"] {
+    max-width: 3ch;
+    text-align: center;
+}
+
+/* Hide SVG text when field is being edited (prevents ghosting) */
+.blocklyEditing > .blocklyFieldText {
+    visibility: hidden;
+}

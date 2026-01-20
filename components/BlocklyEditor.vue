@@ -181,6 +181,17 @@ onMounted(() => {
 
         generatedCode.value = gogoGenerator.workspaceToCode(workspace).trim();
 
+        // Clear combine popup when blocks are moved (prevents stale highlight after dragging)
+        if (event.type === Blockly.Events.BLOCK_MOVE) {
+            if (currentBunch.value.length > 0) {
+                const movedBlockId = event.blockId;
+                const isPartOfBunch = currentBunch.value.some(b => b.id === movedBlockId);
+                if (isPartOfBunch) {
+                    hideCombinePopup();
+                }
+            }
+        }
+
         // Combine/Separate blocks feature: detect on block click
         if (event.type === Blockly.Events.CLICK && event.blockId) {
             const clickedBlock = workspace.getBlockById(event.blockId);
