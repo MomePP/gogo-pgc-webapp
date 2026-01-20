@@ -69,44 +69,47 @@ watch(isExpanded, () => {
     <div class="relative">
         <!-- Floating Pill -->
         <div @click="!isEditing && (isExpanded = !isExpanded)" :class="[
-            'bg-white rounded-full shadow-lg border border-gray-100 px-4 py-2 flex items-center gap-3 cursor-pointer hover:bg-gray-50 transition-all select-none h-[42px]',
+            'bg-white rounded-2xl shadow-xl border px-5 py-3 flex items-center gap-4 cursor-pointer hover:shadow-2xl transition-all select-none',
+            is_connected ? 'border-green-200 ring-2 ring-green-100' : 'border-gray-200',
             { 'noti-pulse': newMessagePulse && !isExpanded }
         ]">
 
             <!-- Edit Mode -->
-            <div v-if="isEditing" class="flex items-center gap-2" @click.stop>
-                <input 
+            <div v-if="isEditing" class="flex items-center gap-3" @click.stop>
+                <input
                     ref="channelInputRef"
-                    v-model="localChannel" 
+                    v-model="localChannel"
                     type="number"
-                    class="w-24 bg-gray-50 border border-gray-200 rounded px-2 py-0.5 text-sm font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    class="w-28 bg-gray-50 border-2 border-blue-300 rounded-xl px-3 py-2 text-xl font-black text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center"
                     placeholder="Channel"
                     @keyup.enter="saveChannel"
                     @keyup.esc="cancelEditing"
                     @blur="saveChannel"
                 />
-                <button @click="saveChannel" class="text-green-600 hover:text-green-700">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" /></svg>
+                <button @click="saveChannel" class="p-2 rounded-full bg-green-100 text-green-600 hover:bg-green-200 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" /></svg>
                 </button>
             </div>
 
             <!-- Display Mode -->
             <template v-else>
-                <!-- Dot Indicator (No Text) -->
+                <!-- Connection Status Indicator -->
                 <div class="flex items-center justify-center">
-                     <span class="w-2.5 h-2.5 rounded-full shadow-sm ring-1 ring-white" :class="is_connected ? 'bg-green-500' : 'bg-gray-300'"></span>
+                    <span class="w-3 h-3 rounded-full shadow-md"
+                        :class="is_connected ? 'bg-green-500 ring-4 ring-green-100' : 'bg-gray-300 ring-2 ring-gray-100'"></span>
                 </div>
 
                 <!-- Channel Info -->
-                <div class="flex items-center gap-2 group px-1">
-                    <div class="flex flex-col items-start leading-none gap-0.5">
-                        <span class="text-[9px] uppercase font-extrabold text-gray-400 tracking-wider">Channel</span>
-                        <span class="text-base font-black text-gray-800 font-mono tracking-tight">{{ channel || '...' }}</span>
+                <div class="flex items-center gap-3 group">
+                    <div class="flex flex-col items-start leading-none gap-1">
+                        <span class="text-[10px] uppercase font-bold text-gray-400 tracking-widest">Channel</span>
+                        <span class="text-2xl font-black text-gray-900 font-mono tracking-tight">{{ channel || '—' }}</span>
                     </div>
-                    
-                    <!-- Edit Icon (Visual Cue) -->
-                    <button @click="startEditing" class="p-1 rounded-full hover:bg-gray-200 text-gray-400 hover:text-blue-500 transition-colors">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+
+                    <!-- Edit Icon -->
+                    <button @click="startEditing"
+                        class="p-2 rounded-xl hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition-all hover:scale-110">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                         </svg>
                     </button>
@@ -115,7 +118,7 @@ watch(isExpanded, () => {
                 <!-- Message Count Badge -->
                 <transition name="pop">
                     <div v-if="received_messages.length > 0" :key="received_messages.length"
-                        class="bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold shadow-sm shadow-blue-200">
+                        class="bg-blue-600 text-white text-xs px-2.5 py-1 rounded-full font-bold shadow-md shadow-blue-200 min-w-[28px] text-center">
                         {{ received_messages.length }}
                     </div>
                 </transition>

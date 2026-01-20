@@ -18,9 +18,11 @@ const wifiConfig = ref({
     password: ''
 })
 
-const isWifiExpanded = ref(false)
+const isWifiExpanded = ref(true)
+const isChannelExpanded = ref(true)
 const isStep3Expanded = ref(false)
 const showChannelInfo = ref(false)
+const noWifi = ref(false)
 
 const programConfig = ref({
     playbackWait: 500, // milliseconds
@@ -232,8 +234,8 @@ const handleConfigureRobot = async () => {
     // Auto-connect to MQTT
     await connectChannel()
 
-    // Step 2 Action (Conditional): only if SSID is provided
-    if (wifiConfig.value.ssid) {
+    // Step 2 Action (Conditional): only if SSID is provided AND "no WiFi" is not checked
+    if (wifiConfig.value.ssid && !noWifi.value) {
         await sendWifiConfig()
     }
     
@@ -301,15 +303,13 @@ const blurInput = (e: Event) => {
             <!-- 2. WiFi Card -->
             <div class="bg-gray-800/40 rounded-3xl overflow-hidden border border-white/5 transition-all duration-300"
                 :class="isWifiExpanded ? 'bg-gray-800/60 ring-1 ring-blue-500/20' : 'hover:bg-gray-800/60'">
-                <div @click="isWifiExpanded = !isWifiExpanded" 
+                <div @click="isWifiExpanded = !isWifiExpanded"
                     class="p-5 flex items-center justify-between cursor-pointer group select-none">
                     <div class="flex items-center gap-4">
                         <span class="text-4xl font-black text-blue-500/50 select-none leading-none">2</span>
-                        <span class="text-xs font-bold uppercase tracking-widest text-gray-300">
-                            WiFi connection <span class="text-gray-500 normal-case tracking-normal ml-1">(Optional)</span>
-                        </span>
+                        <span class="text-xs font-bold uppercase tracking-widest text-gray-300">WiFi Setup</span>
                     </div>
-                    <svg class="w-4 h-4 text-gray-500 transition-transform duration-300" 
+                    <svg class="w-4 h-4 text-gray-500 transition-transform duration-300"
                         :class="isWifiExpanded ? 'rotate-180 text-blue-400' : ''"
                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
@@ -318,57 +318,84 @@ const blurInput = (e: Event) => {
 
                 <transition name="slide">
                     <div v-if="isWifiExpanded" class="px-5 pb-5 space-y-5">
-                        <div class="space-y-2">
+                        <!-- No WiFi checkbox -->
+                        <label class="flex items-center gap-3 cursor-pointer select-none">
+                            <input type="checkbox" v-model="noWifi"
+                                class="w-4 h-4 rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500/30 focus:ring-offset-0" />
+                            <span class="text-sm text-gray-400">I don't have WiFi</span>
+                        </label>
+
+                        <div class="space-y-2" :class="{ 'opacity-40 pointer-events-none': noWifi }">
                             <label class="text-[10px] font-bold text-gray-500 uppercase ml-1">WiFi Name</label>
-                            <input v-model="wifiConfig.ssid" type="text" placeholder="SSID"
-                                class="w-full px-4 py-3 bg-gray-900/50 rounded-xl border border-white/5 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 outline-none transition-all text-sm font-semibold" />
+                            <input v-model="wifiConfig.ssid" type="text" placeholder="SSID" :disabled="noWifi"
+                                class="w-full px-4 py-3 bg-gray-900/50 rounded-xl border border-white/5 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 outline-none transition-all text-sm font-semibold disabled:cursor-not-allowed" />
                         </div>
 
-                        <div class="space-y-2">
+                        <div class="space-y-2" :class="{ 'opacity-40 pointer-events-none': noWifi }">
                             <label class="text-[10px] font-bold text-gray-500 uppercase ml-1">Password</label>
                             <div class="relative">
-                                <input :type="showPassword ? 'text' : 'password'" v-model="wifiConfig.password" placeholder="••••••••"
-                                    class="w-full px-4 py-3 bg-gray-900/50 rounded-xl border border-white/5 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 outline-none transition-all text-sm font-semibold" />
-                                <button @click="showPassword = !showPassword" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-600 hover:text-blue-400 transition-colors">
+                                <input :type="showPassword ? 'text' : 'password'" v-model="wifiConfig.password" placeholder="••••••••" :disabled="noWifi"
+                                    class="w-full px-4 py-3 bg-gray-900/50 rounded-xl border border-white/5 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 outline-none transition-all text-sm font-semibold disabled:cursor-not-allowed" />
+                                <button @click="showPassword = !showPassword" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-600 hover:text-blue-400 transition-colors" :disabled="noWifi">
                                     <svg v-if="showPassword" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" /></svg>
                                     <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                                 </button>
                             </div>
                         </div>
+                    </div>
+                </transition>
+            </div>
 
-                        <div class="space-y-2">
-                            <div class="flex items-center gap-1">
-                                <label class="text-[10px] font-bold text-gray-500 uppercase ml-1">Your Channel Number</label>
-                                <button @click="showChannelInfo = !showChannelInfo" class="text-gray-500 hover:text-blue-400 transition-colors">
-                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                </button>
-                            </div>
-                            <div class="flex gap-2">
-                                <input v-model="localChannel" type="number" placeholder="Pick a number" @wheel="blurInput"
-                                    class="w-full px-4 py-3 bg-gray-900/50 rounded-xl border border-white/5 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 outline-none transition-all text-sm font-semibold no-spinner" />
-                                <button @click="randomizeChannel" 
-                                    class="px-4 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl text-gray-300 font-bold text-xs uppercase tracking-wider transition-colors">
-                                    Randomize
-                                </button>
-                            </div>
-                            <!-- Tip Message -->
-                            <transition name="fade">
-                                <p v-if="showChannelInfo" class="text-xs text-blue-300 bg-blue-500/10 p-2 rounded-lg border border-blue-500/20">
-                                    Use this number to send and receive block code on the right panel. Don’t forget it.
-                                </p>
-                            </transition>
+            <!-- 3. Channel Card (Collapsible) -->
+            <div class="bg-gray-800/40 rounded-3xl overflow-hidden border border-white/5 transition-all duration-300"
+                :class="isChannelExpanded ? 'bg-gray-800/60 ring-1 ring-blue-500/20' : 'hover:bg-gray-800/60'">
+                <div @click="isChannelExpanded = !isChannelExpanded"
+                    class="p-5 flex items-center justify-between cursor-pointer group select-none">
+                    <div class="flex items-center gap-4">
+                        <span class="text-4xl font-black text-blue-500/50 select-none leading-none">3</span>
+                        <div>
+                            <span class="text-xs font-bold uppercase tracking-widest text-gray-300">Your Channel</span>
+                            <p class="text-[10px] text-gray-500 mt-0.5">Skip if no WiFi</p>
+                        </div>
+                    </div>
+                    <svg class="w-4 h-4 text-gray-500 transition-transform duration-300"
+                        :class="isChannelExpanded ? 'rotate-180 text-blue-400' : ''"
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                </div>
+
+                <transition name="slide">
+                    <div v-if="isChannelExpanded" class="px-5 pb-5 space-y-4">
+                        <!-- Info tooltip (expanded details) -->
+                        <transition name="fade">
+                            <p v-if="showChannelInfo" class="text-sm text-blue-200 bg-blue-500/15 p-3 rounded-xl border border-blue-500/25 leading-relaxed">
+                                Use this number to send and receive block code on the right panel. Your robot and this app must use the same channel.
+                            </p>
+                        </transition>
+
+                        <div class="flex gap-3 items-stretch">
+                            <input v-model="localChannel" type="number" placeholder="Channel" @wheel="blurInput"
+                                class="flex-1 min-w-0 px-4 py-4 bg-gray-900/70 rounded-2xl border-2 border-blue-500/40 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/30 outline-none transition-all text-2xl font-black text-center tracking-widest text-white no-spinner" />
+                            <button @click="randomizeChannel"
+                                class="px-4 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 rounded-2xl text-blue-300 hover:text-blue-200 transition-all flex items-center justify-center flex-shrink-0"
+                                title="Randomize">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                            </button>
                         </div>
                     </div>
                 </transition>
             </div>
 
-            <!-- 3. Template Selection Card -->
+            <!-- 4. Template Selection Card -->
             <div class="bg-gray-800/40 rounded-3xl overflow-hidden border border-white/5 transition-all duration-300"
                 :class="isStep3Expanded ? 'bg-gray-800/60 ring-1 ring-orange-500/20' : 'hover:bg-gray-800/60'">
                 <div @click="isStep3Expanded = !isStep3Expanded"
                     class="p-5 flex items-center justify-between cursor-pointer group select-none">
                     <div class="flex items-center gap-4">
-                        <span class="text-4xl font-black text-orange-500/50 select-none leading-none">3</span>
+                        <span class="text-4xl font-black text-orange-500/50 select-none leading-none">4</span>
                         <span class="text-xs font-bold uppercase tracking-widest text-gray-300">Settings</span>
                     </div>
                     <svg class="w-4 h-4 text-gray-500 transition-transform duration-300"
@@ -378,31 +405,29 @@ const blurInput = (e: Event) => {
                     </svg>
                 </div>
 
-                <div class="px-5 pb-5 space-y-5">
-                    <transition name="slide">
-                        <div v-if="isStep3Expanded" class="space-y-4">
-                            <p class="text-[10px] text-gray-500 italic">Times are in milliseconds</p>
-                            
-                            <div class="space-y-2">
-                                <label class="text-[10px] font-bold text-gray-500 uppercase ml-1">Pause time between commands</label>
-                                <input v-model.number="programConfig.playbackWait" type="number" @wheel="blurInput"
-                                    class="w-full px-4 py-3 bg-gray-900/50 rounded-xl border border-white/5 focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/50 outline-none transition-all text-sm font-semibold no-spinner" />
-                            </div>
+                <transition name="slide">
+                    <div v-if="isStep3Expanded" class="px-5 pb-5 space-y-4">
+                        <p class="text-[10px] text-gray-500 italic">Times are in milliseconds</p>
 
-                            <div class="space-y-2">
-                                <label class="text-[10px] font-bold text-gray-500 uppercase ml-1">Turn duration</label>
-                                <input v-model.number="programConfig.turnWait" type="number" @wheel="blurInput"
-                                    class="w-full px-4 py-3 bg-gray-900/50 rounded-xl border border-white/5 focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/50 outline-none transition-all text-sm font-semibold no-spinner" />
-                            </div>
-
-                            <div class="space-y-2">
-                                <label class="text-[10px] font-bold text-gray-500 uppercase ml-1">Move duration</label>
-                                <input v-model.number="programConfig.moveWait" type="number" @wheel="blurInput"
-                                    class="w-full px-4 py-3 bg-gray-900/50 rounded-xl border border-white/5 focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/50 outline-none transition-all text-sm font-semibold no-spinner" />
-                            </div>
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase ml-1">Pause time between commands</label>
+                            <input v-model.number="programConfig.playbackWait" type="number" @wheel="blurInput"
+                                class="w-full px-4 py-3 bg-gray-900/50 rounded-xl border border-white/5 focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/50 outline-none transition-all text-sm font-semibold no-spinner" />
                         </div>
-                    </transition>
-                </div>
+
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase ml-1">Turn duration</label>
+                            <input v-model.number="programConfig.turnWait" type="number" @wheel="blurInput"
+                                class="w-full px-4 py-3 bg-gray-900/50 rounded-xl border border-white/5 focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/50 outline-none transition-all text-sm font-semibold no-spinner" />
+                        </div>
+
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase ml-1">Move duration</label>
+                            <input v-model.number="programConfig.moveWait" type="number" @wheel="blurInput"
+                                class="w-full px-4 py-3 bg-gray-900/50 rounded-xl border border-white/5 focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/50 outline-none transition-all text-sm font-semibold no-spinner" />
+                        </div>
+                    </div>
+                </transition>
             </div>
 
             <!-- Configure Robot Button (Moved outside Step 3) -->
