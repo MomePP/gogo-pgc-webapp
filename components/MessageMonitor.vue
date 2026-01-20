@@ -102,7 +102,7 @@ watch(isExpanded, () => {
                 <!-- Channel Info -->
                 <div class="flex items-center gap-3 group">
                     <div class="flex flex-col items-start leading-none gap-1">
-                        <span class="text-[10px] uppercase font-bold text-gray-400 tracking-widest">Channel</span>
+                        <span class="text-[10px] uppercase font-bold text-gray-400 tracking-widest">Robot ID</span>
                         <span class="text-2xl font-black text-gray-900 font-mono tracking-tight">{{ channel || '—' }}</span>
                     </div>
 
