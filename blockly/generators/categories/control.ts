@@ -32,4 +32,30 @@ export default function (gogoGenerator: any) {
         return `beep\n`
     }
 
+    // Combined block generators
+    gogoGenerator.forBlock['movement_forward_combined'] = function (block: any, generator: any) {
+        const count = block.getFieldValue('COUNT') || 2;
+        return 'up\n'.repeat(count);
+    }
+
+    gogoGenerator.forBlock['movement_backward_combined'] = function (block: any, generator: any) {
+        const count = block.getFieldValue('COUNT') || 2;
+        return 'down\n'.repeat(count);
+    }
+
+    gogoGenerator.forBlock['movement_left_combined'] = function (block: any, generator: any) {
+        const count = block.getFieldValue('COUNT') || 2;
+        return 'left\n'.repeat(count);
+    }
+
+    gogoGenerator.forBlock['movement_right_combined'] = function (block: any, generator: any) {
+        const count = block.getFieldValue('COUNT') || 2;
+        return 'right\n'.repeat(count);
+    }
+
+    gogoGenerator.forBlock['movement_beep_combined'] = function (block: any, generator: any) {
+        const count = block.getFieldValue('COUNT') || 2;
+        return 'beep\n'.repeat(count);
+    }
+
 }

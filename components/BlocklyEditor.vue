@@ -11,6 +11,7 @@ import initBlocks from '~/blockly/blocks/gogo-block';
 import initGenerator from '~/blockly/generators/gogo-generator'
 import customCategory from '~/blockly/custom-category'
 import xmlToolbox from '~/blockly/gogo-toolbox'
+import { getBunch, highlightBunch, clearHighlight, combineBunch, isCombinable } from '~/blockly/combineBlocks'
 
 const { $mqtt } = useNuxtApp(); // Get Blockly & MQTT from Nuxt plugin
 const { webhidConnected } = useWebHID()
@@ -24,6 +25,12 @@ let onMessageHandler; // Store the event handler reference
 const generatedCode = ref('');
 let workspace = Blockly.WorkspaceSvg;
 let gogoGenerator = null;
+
+// Combine blocks feature state
+const showCombinePopup = ref(false);
+const combinePopupPosition = ref({ x: 0, y: 0 });
+const lastClickPos = ref(null);
+const currentBunch = ref([]);
 
 // Local channel state to decouple input from global state
 const localChannel = ref(channel.value);
@@ -168,6 +175,43 @@ onMounted(() => {
         // }
 
         generatedCode.value = gogoGenerator.workspaceToCode(workspace).trim();
+
+        // Combine blocks feature: detect bunch on block click
+        if (event.type === Blockly.Events.CLICK && event.blockId) {
+            const clickedBlock = workspace.getBlockById(event.blockId);
+            if (clickedBlock && isCombinable(clickedBlock.type)) {
+                const bunch = getBunch(clickedBlock);
+                if (bunch.length >= 2) {
+                    currentBunch.value = bunch;
+                    highlightBunch(bunch);
+                    
+                    // Position popup near the first block of the bunch
+                    // We use the first block because the bunch is a stack
+                    const firstBlock = bunch[0];
+                    const blockSvg = firstBlock.getSvgRoot();
+                    if (blockSvg) {
+                        const blockRect = blockSvg.getBoundingClientRect();
+                        const containerRect = document.getElementById('blocklyDiv').getBoundingClientRect();
+                        
+                        // Place it on the right side of the block
+                        combinePopupPosition.value = {
+                            x: blockRect.right - containerRect.left + 10,
+                            y: blockRect.top - containerRect.top + 5
+                        };
+                        showCombinePopup.value = true;
+                    }
+                } else {
+                    hideCombinePopup();
+                }
+            } else {
+                hideCombinePopup();
+            }
+        }
+
+        // Hide popup when clicking workspace background
+        if (event.type === Blockly.Events.CLICK && !event.blockId) {
+            hideCombinePopup();
+        }
     });
 
     window.addEventListener('resize', () => Blockly.svgResize(workspace));
@@ -429,6 +473,26 @@ const controlStop = () => {
 
     setTimeout(() => { isStopping.value = false; }, 400);
 };
+
+// Combine blocks feature functions
+const hideCombinePopup = () => {
+    showCombinePopup.value = false;
+    currentBunch.value = [];
+    clearHighlight();
+};
+
+const handleCombine = () => {
+    if (currentBunch.value.length >= 2) {
+        // Use requestAnimationFrame to ensure this runs outside the current Blockly event loop
+        // to avoid conflicts with the click event processing.
+        requestAnimationFrame(() => {
+            combineBunch(currentBunch.value, workspace, Blockly);
+            hideCombinePopup();
+        });
+    } else {
+        hideCombinePopup();
+    }
+};
 </script>
 
 <template>
@@ -471,6 +535,19 @@ const controlStop = () => {
 
             <!-- Workspace -->
             <div id="blocklyDiv" class="absolute inset-0"></div>
+
+            <!-- Combine Popup Button -->
+            <button
+                v-if="showCombinePopup"
+                class="combine-popup"
+                :style="{ left: combinePopupPosition.x + 'px', top: combinePopupPosition.y + 'px' }"
+                @click="handleCombine"
+            >
+                <svg class="combine-popup-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14" />
+                </svg>
+                Combine
+            </button>
         </main>
 
         <!-- Footer / Control Panel -->
