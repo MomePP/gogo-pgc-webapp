@@ -61,6 +61,15 @@ export default function (Blockly: any) {
             tooltip: 'Stop move',
             helpUrl: ''
         },
+        {
+            type: 'movement_beep',
+            message0: 'beep',
+            previousStatement: true,
+            nextStatement: true,
+            colour: '#FFCA28',
+            tooltip: 'Make a beep sound',
+            helpUrl: ''
+        },
     ])
 
     return blocks

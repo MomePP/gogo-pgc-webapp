@@ -5,6 +5,7 @@ export default `
     <block type="movement_left"></block>
     <block type="movement_right"></block>
     <block type="movement_stop"></block>
+    <block type="movement_beep"></block>
 
 <!-- 
     <category name="Time" categorystyle="time_category">

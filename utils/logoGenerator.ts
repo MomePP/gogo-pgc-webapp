@@ -16,6 +16,7 @@ export const generateLogoCode = (config: LogoProgramSettings): string => {
     set stop2 "S"
     set program_run "run"
     set program_stop "stop"
+    set beep_key "P"
     set program_repeat 1
     set playback_wait (${config.playbackWait}) 
     set move_wait (${config.moveWait}) 
@@ -170,6 +171,10 @@ to playback
             _then ( action = stop2 )
             [
                 move_stop
+            ]
+            _then ( action = beep_key )
+            [
+                beep
             ]
             set index index + 1
             wait playback_wait

@@ -28,4 +28,8 @@ export default function (gogoGenerator: any) {
         return `stop\n`
     }
 
+    gogoGenerator.forBlock['movement_beep'] = function (block: any, generator: any) {
+        return `beep\n`
+    }
+
 }

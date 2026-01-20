@@ -56,7 +56,8 @@ const commandMapping = new BiMap([
     ['B', 'down'],
     ['L', 'left'],
     ['R', 'right'],
-    ['S', 'stop']
+    ['S', 'stop'],
+    ['P', 'beep']
 ]);
 
 onMounted(() => {
