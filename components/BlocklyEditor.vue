@@ -11,7 +11,7 @@ import initBlocks from '~/blockly/blocks/gogo-block';
 import initGenerator from '~/blockly/generators/gogo-generator'
 import customCategory from '~/blockly/custom-category'
 import xmlToolbox from '~/blockly/gogo-toolbox'
-import { getBunch, highlightBunch, clearHighlight, combineBunch, isCombinable } from '~/blockly/combineBlocks'
+import { getBunch, highlightBunch, clearHighlight, combineBunch, separateBunch, isCombinable, isSeparable } from '~/blockly/combineBlocks'
 
 const { $mqtt } = useNuxtApp(); // Get Blockly & MQTT from Nuxt plugin
 const { webhidConnected } = useWebHID()
@@ -31,6 +31,11 @@ const showCombinePopup = ref(false);
 const combinePopupPosition = ref({ x: 0, y: 0 });
 const lastClickPos = ref(null);
 const currentBunch = ref([]);
+
+// Separate blocks feature state
+const showSeparatePopup = ref(false);
+const separatePopupPosition = ref({ x: 0, y: 0 });
+const currentCombinedBlock = ref(null);
 
 // Local channel state to decouple input from global state
 const localChannel = ref(channel.value);
@@ -176,24 +181,43 @@ onMounted(() => {
 
         generatedCode.value = gogoGenerator.workspaceToCode(workspace).trim();
 
-        // Combine blocks feature: detect bunch on block click
+        // Combine/Separate blocks feature: detect on block click
         if (event.type === Blockly.Events.CLICK && event.blockId) {
             const clickedBlock = workspace.getBlockById(event.blockId);
-            if (clickedBlock && isCombinable(clickedBlock.type)) {
+
+            // Check if it's a combined block that can be separated
+            if (clickedBlock && isSeparable(clickedBlock.type)) {
+                hideCombinePopup();
+                currentCombinedBlock.value = clickedBlock;
+
+                // Position popup near the block
+                const blockSvg = clickedBlock.getSvgRoot();
+                if (blockSvg) {
+                    const blockRect = blockSvg.getBoundingClientRect();
+                    const containerRect = document.getElementById('blocklyDiv').getBoundingClientRect();
+
+                    separatePopupPosition.value = {
+                        x: blockRect.right - containerRect.left + 10,
+                        y: blockRect.top - containerRect.top + 5
+                    };
+                    showSeparatePopup.value = true;
+                }
+            }
+            // Check if it's a combinable block with a bunch
+            else if (clickedBlock && isCombinable(clickedBlock.type)) {
+                hideSeparatePopup();
                 const bunch = getBunch(clickedBlock);
                 if (bunch.length >= 2) {
                     currentBunch.value = bunch;
                     highlightBunch(bunch);
-                    
+
                     // Position popup near the first block of the bunch
-                    // We use the first block because the bunch is a stack
                     const firstBlock = bunch[0];
                     const blockSvg = firstBlock.getSvgRoot();
                     if (blockSvg) {
                         const blockRect = blockSvg.getBoundingClientRect();
                         const containerRect = document.getElementById('blocklyDiv').getBoundingClientRect();
-                        
-                        // Place it on the right side of the block
+
                         combinePopupPosition.value = {
                             x: blockRect.right - containerRect.left + 10,
                             y: blockRect.top - containerRect.top + 5
@@ -205,12 +229,14 @@ onMounted(() => {
                 }
             } else {
                 hideCombinePopup();
+                hideSeparatePopup();
             }
         }
 
-        // Hide popup when clicking workspace background
+        // Hide popups when clicking workspace background
         if (event.type === Blockly.Events.CLICK && !event.blockId) {
             hideCombinePopup();
+            hideSeparatePopup();
         }
     });
 
@@ -493,6 +519,23 @@ const handleCombine = () => {
         hideCombinePopup();
     }
 };
+
+// Separate blocks feature functions
+const hideSeparatePopup = () => {
+    showSeparatePopup.value = false;
+    currentCombinedBlock.value = null;
+};
+
+const handleSeparate = () => {
+    if (currentCombinedBlock.value) {
+        requestAnimationFrame(() => {
+            separateBunch(currentCombinedBlock.value, workspace, Blockly);
+            hideSeparatePopup();
+        });
+    } else {
+        hideSeparatePopup();
+    }
+};
 </script>
 
 <template>
@@ -547,6 +590,19 @@ const handleCombine = () => {
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14" />
                 </svg>
                 Combine
+            </button>
+
+            <!-- Separate Popup Button -->
+            <button
+                v-if="showSeparatePopup"
+                class="separate-popup"
+                :style="{ left: separatePopupPosition.x + 'px', top: separatePopupPosition.y + 'px' }"
+                @click="handleSeparate"
+            >
+                <svg class="separate-popup-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                </svg>
+                Separate
             </button>
         </main>
 

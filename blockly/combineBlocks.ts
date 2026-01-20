@@ -155,6 +155,13 @@ export const isCombinable = (type: string): boolean => {
 };
 
 /**
+ * Check if a block type is a combined block that can be separated
+ */
+export const isSeparable = (type: string): boolean => {
+    return type.endsWith('_combined');
+};
+
+/**
  * Combine a bunch of blocks into a single combined block
  * 
  * @param blocks Array of blocks to combine (must be N >= 2)
@@ -304,6 +311,175 @@ export const combineBunch = (blocks: any[], workspace: any, Blockly: any): void 
 
     } catch (err) {
         console.error('[Combine] Fatal error:', err);
+    } finally {
+        Blockly.Events.setGroup(false);
+    }
+
+    clearHighlight();
+};
+
+/**
+ * Separate a combined block back into individual blocks
+ *
+ * @param combinedBlock The combined block to separate
+ * @param workspace The Blockly workspace
+ * @param Blockly The Blockly library reference
+ */
+export const separateBunch = (combinedBlock: any, workspace: any, Blockly: any): void => {
+    const count = combinedBlock.getFieldValue('COUNT');
+    if (!count || count < 2) return;
+
+    const combinedType = combinedBlock.type;
+    if (!isSeparable(combinedType)) return;
+
+    const baseType = getBaseType(combinedType);
+
+    // Start event group for single undo
+    Blockly.Events.setGroup(true);
+
+    try {
+        console.log(`[Separate] Starting separate for ${combinedType} with count ${count}`);
+
+        // 1. Find the root block (the top-level block that contains our combined block)
+        let rootBlock = combinedBlock;
+        while (rootBlock.getParent()) {
+            rootBlock = rootBlock.getParent();
+        }
+        console.log(`[Separate] Root block: ${rootBlock.type} (id: ${rootBlock.id})`);
+
+        // 2. Serialize the entire root block tree
+        const rootState = Blockly.serialization.blocks.save(rootBlock, {
+            addCoordinates: true,
+            addInputBlocks: true,
+            addNextBlocks: true,
+        });
+        console.log(`[Separate] Root block state BEFORE:`, JSON.stringify(rootState, null, 2));
+
+        // 3. Get the ID of the combined block
+        const combinedBlockId = combinedBlock.id;
+
+        // 4. Find what comes after the combined block (from the serialized state, not the block)
+        // We need to find it in the state tree because the block's next might be included
+        const findBlockInState = (state: any, targetId: string): any => {
+            if (!state) return null;
+            if (state.id === targetId) return state;
+
+            // Check inputs
+            if (state.inputs) {
+                for (const inputName in state.inputs) {
+                    const input = state.inputs[inputName];
+                    if (input.block) {
+                        const found = findBlockInState(input.block, targetId);
+                        if (found) return found;
+                    }
+                }
+            }
+
+            // Check next chain
+            if (state.next?.block) {
+                const found = findBlockInState(state.next.block, targetId);
+                if (found) return found;
+            }
+
+            return null;
+        };
+
+        const combinedBlockState = findBlockInState(rootState, combinedBlockId);
+        const afterBlockState = combinedBlockState?.next?.block || null;
+
+        // 5. Build chain of N individual blocks
+        const buildBlockChain = (n: number, type: string, afterState: any): any => {
+            if (n <= 0) return afterState;
+
+            const block: any = { type };
+
+            if (n > 1) {
+                block.next = { block: buildBlockChain(n - 1, type, afterState) };
+            } else if (afterState) {
+                block.next = { block: afterState };
+            }
+
+            return block;
+        };
+
+        const separatedChain = buildBlockChain(count, baseType, afterBlockState);
+        console.log(`[Separate] Separated chain:`, JSON.stringify(separatedChain, null, 2));
+
+        // 6. Recursively find and replace the combined block in the state tree
+        const replaceInState = (state: any): boolean => {
+            if (!state) return false;
+
+            // Check inputs (for statement inputs like 'statement')
+            if (state.inputs) {
+                for (const inputName in state.inputs) {
+                    const input = state.inputs[inputName];
+                    if (input.block) {
+                        if (input.block.id === combinedBlockId) {
+                            console.log(`[Separate] Found combined block at input '${inputName}'`);
+                            input.block = separatedChain;
+                            return true;
+                        }
+                        if (replaceInState(input.block)) return true;
+                    }
+                }
+            }
+
+            // Check next chain
+            if (state.next?.block) {
+                if (state.next.block.id === combinedBlockId) {
+                    console.log(`[Separate] Found combined block in next chain`);
+                    state.next.block = separatedChain;
+                    return true;
+                }
+                if (replaceInState(state.next.block)) return true;
+            }
+
+            return false;
+        };
+
+        const replaced = replaceInState(rootState);
+        console.log(`[Separate] Replacement successful: ${replaced}`);
+        console.log(`[Separate] Root block state AFTER:`, JSON.stringify(rootState, null, 2));
+
+        // 7. Delete the old root block
+        rootBlock.dispose(false, false);
+
+        // 8. Recreate the entire tree from the modified state
+        const newRootBlock = Blockly.serialization.blocks.append(rootState, workspace);
+        console.log(`[Separate] Recreated root block: ${newRootBlock.type}`);
+
+        // 9. Select the first block of the separated chain
+        const findFirstSeparatedBlock = (block: any): any => {
+            if (block.type === baseType) return block;
+            // Check inputs
+            for (const input of block.inputList || []) {
+                if (input.connection?.targetBlock()) {
+                    let current = input.connection.targetBlock();
+                    while (current) {
+                        if (current.type === baseType) return current;
+                        const found = findFirstSeparatedBlock(current);
+                        if (found) return found;
+                        current = current.getNextBlock();
+                    }
+                }
+            }
+            // Check next
+            if (block.getNextBlock()) {
+                const found = findFirstSeparatedBlock(block.getNextBlock());
+                if (found) return found;
+            }
+            return null;
+        };
+
+        const firstSeparatedBlock = findFirstSeparatedBlock(newRootBlock);
+        if (firstSeparatedBlock) {
+            firstSeparatedBlock.select();
+        }
+
+        console.log(`[Separate] Success!`);
+
+    } catch (err) {
+        console.error('[Separate] Fatal error:', err);
     } finally {
         Blockly.Events.setGroup(false);
     }

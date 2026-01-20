@@ -39,3 +39,36 @@
     width: 16px;
     height: 16px;
 }
+
+/* Separate Popup Button */
+.separate-popup {
+    position: absolute;
+    z-index: 1000;
+    background: linear-gradient(135deg, #F59E0B 0%, #EF4444 100%);
+    color: white;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+    transition: all 0.15s ease;
+    border: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.separate-popup:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 16px rgba(245, 158, 11, 0.5);
+}
+
+.separate-popup:active {
+    transform: scale(0.98);
+}
+
+.separate-popup-icon {
+    width: 16px;
+    height: 16px;
+}
