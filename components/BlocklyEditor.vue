@@ -37,6 +37,21 @@ const showSeparatePopup = ref(false);
 const separatePopupPosition = ref({ x: 0, y: 0 });
 const currentCombinedBlock = ref(null);
 
+// Markdown modal state
+const showMarkdownModal = ref(false);
+const markdownModalTitle = ref('');
+const markdownModalUrl = ref('');
+
+const openGuide = (title, url) => {
+    markdownModalTitle.value = title;
+    markdownModalUrl.value = url;
+    showMarkdownModal.value = true;
+};
+
+const closeGuide = () => {
+    showMarkdownModal.value = false;
+};
+
 // Local channel state to decouple input from global state
 const localChannel = ref(channel.value);
 
@@ -607,9 +622,41 @@ const handleSeparate = () => {
 
         <!-- Footer / Control Panel -->
         <footer class="w-full px-6 py-4 bg-white border-t border-gray-100 z-20 flex items-center relative">
-            <div class="flex items-center gap-4">
-                <!-- Channel controls moved to MessageMonitor -->
+            <!-- Help Guide Icons (Left-aligned) -->
+            <div class="flex items-center gap-2">
+                <button @click="openGuide('Robot Car Guide', '/docs/robot-car-guide.md')"
+                   class="p-2.5 rounded-xl text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+                   title="Robot Car Guide">
+                    <!-- Robot Car Icon -->
+                    <svg class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="8" width="18" height="8" rx="2" />
+                        <circle cx="7" cy="16" r="2" />
+                        <circle cx="17" cy="16" r="2" />
+                        <path d="M5 8V6a2 2 0 012-2h10a2 2 0 012 2v2" />
+                        <line x1="12" y1="4" x2="12" y2="8" />
+                    </svg>
+                </button>
+                <button @click="openGuide('IR Remote Guide', '/docs/ir-remote-guide.md')"
+                   class="p-2.5 rounded-xl text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+                   title="IR Remote Guide">
+                    <!-- Remote Control Icon -->
+                    <svg class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="6" y="2" width="12" height="20" rx="2" />
+                        <circle cx="12" cy="7" r="2" />
+                        <line x1="9" y1="12" x2="9" y2="12.01" />
+                        <line x1="12" y1="12" x2="12" y2="12.01" />
+                        <line x1="15" y1="12" x2="15" y2="12.01" />
+                        <line x1="9" y1="15" x2="9" y2="15.01" />
+                        <line x1="12" y1="15" x2="12" y2="15.01" />
+                        <line x1="15" y1="15" x2="15" y2="15.01" />
+                        <line x1="9" y1="18" x2="9" y2="18.01" />
+                        <line x1="12" y1="18" x2="12" y2="18.01" />
+                        <line x1="15" y1="18" x2="15" y2="18.01" />
+                    </svg>
+                </button>
             </div>
+
+            <!-- Run/Stop Controls (Right-aligned) -->
             <div class="flex items-center gap-2 ml-auto">
                 <button @click="handleRunCode" :disabled="isSending || isStopping"
                     class='flex items-center gap-2 px-6 py-2 text-base font-bold rounded-full transition-all duration-150 shadow-sm'
@@ -638,6 +685,14 @@ const handleSeparate = () => {
                 </button>
             </div>
         </footer>
+
+        <!-- Markdown Guide Modal -->
+        <MarkdownModal
+            :show="showMarkdownModal"
+            :title="markdownModalTitle"
+            :markdown-url="markdownModalUrl"
+            @close="closeGuide"
+        />
     </div>
 </template>
 
