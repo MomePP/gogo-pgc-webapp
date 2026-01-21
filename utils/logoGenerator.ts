@@ -25,8 +25,10 @@ export const generateLogoCode = (config: LogoProgramSettings): string => {
     set is_playback 0
     set i 0
     set action 0
-    set index 0
+    set index 4
     set ir_code 0
+    set new_ir 0
+
     subscribemessage "gogo-pgc/blockly/${config.channel}"
     [
         beep
@@ -50,63 +52,92 @@ export const generateLogoCode = (config: LogoProgramSettings): string => {
     ]
     dobackground
     [
+        resett
         forever
         [
             if newir?
             [
-                set i (ir) 
+                _if not (i = ir)
+                [
+                    set i (ir) 
+                    set new_ir (1)
+                    resett
+                ]
+                _then (i = ir)
+                [
+                    _if (timer > 500)
+                    [
+                        set new_ir (1)
+                        resett
+                    ]
+                ]
             ]
             wait 100
+           
+            
         ]
     ]
     output1234,
     setpower 60
+    show "Record Press *"
     forever
     [
-        ifstatechange (newir?)
+        if (new_ir)
         [
-            beep
-            set ir_code (ir) 
-            _if ( ir_code = 22 )
+            set new_ir (0) 
+            set ir_code (i) 
+            
+           
+            _if ( ir_code = 22 )  
             [
-                set is_record (1) 
-                show "recording "
+                _if (is_record = 0)
+                [ 
+                    set is_record (1) 
+                    clear_records
+                    show "Recording..."
+                    beep
+                ]
+                _then (is_record = 1)
+                [ 
+                    set is_record (0) 
+                    publish_commands
+                    show "Play Press # "
+                ]
             ]
-            _then ( ir_code = 13 )
+
+            
+            _then ( ir_code = 13 )  
             [
-                set is_record (0) 
-                publish_commands
-                show "--- "
+                _if (is_playback = 0)
+                [
+                    set is_playback (1) 
+                ]
+                _then (is_playback = 1)
+                [
+                    set is_playback (0) 
+                    clear_playback
+                    show "Record Press *"
+                ]
             ]
-            _then ( ir_code = 69 )
-            [
-                set is_playback (1) 
-            ]
-            _then ( ir_code = 25 )
-            [
-                set is_playback (0)
-                clear_playback
-                show "clear playback "
-            ]
-            _then ( ir_code = 24 )
+            _then ( ir_code = 24 ) 
             [
                 move_forward
             ]
-            _then ( ir_code = 82 )
+            _then ( ir_code = 82 ) 
             [
                 move_backward
             ]
-            _then ( ir_code = 8 )
+            _then ( ir_code = 8 ) 
             [
                 move_left
             ]
-            _then ( ir_code = 90 )
+            _then ( ir_code = 90 ) 
             [
                 move_right
             ]
-            _then ( ir_code = 28 )
+            _then ( ir_code = 28 ) 
             [
-                move_stop
+                sound_beep
             ]
         ]
         if is_playback
@@ -138,7 +169,7 @@ to playback
     [
         if not is_playback
         [
-            show "finished"
+            show "Playback Press #"
             break
         ]
 
@@ -146,7 +177,7 @@ to playback
         [
             if not is_playback
             [
-                show "finished"
+                show "Playback Press #"
                 break
             ]
 
@@ -174,7 +205,7 @@ to playback
             ]
             _then ( action = beep_key )
             [
-                beep
+                sound_beep
             ]
             set index index + 1
             wait playback_wait
@@ -224,6 +255,16 @@ to move_right
     cw
     onfor turn_wait
     record_command right
+end
+
+to sound_beep
+    beep
+    wait playback_wait
+    record_command beep_key
+end
+
+to clear_records
+    set commands "0001"
 end
 
 to record_command :command

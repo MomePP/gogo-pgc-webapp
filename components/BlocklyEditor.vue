@@ -367,6 +367,7 @@ const createBlockFromCommand = (command) => {
         left: "movement_left",
         right: "movement_right",
         stop: "movement_stop",
+        beep: "movement_beep",
         wait: "time_wait_ms",
     };
     const getInputNameForBlockType = (blockType) => {
@@ -491,7 +492,7 @@ const controlDownload = () => {
 const controlRun = () => {
     const topic = controlTopic.value + channel.value;
     $mqtt.publish(topic, 'run');
-    console.log(`📩 [${channel.value}] sent: control run`);
+    console.log(`📩 [${channel.value}] sent: run`);
 };
 
 const isSending = ref(false);
@@ -510,7 +511,7 @@ const handleRunCode = () => {
             controlRun();
             // Keep feedback visible slightly longer for better UX
             setTimeout(() => { isSending.value = false; }, 300);
-        }, 200);
+        }, 400);
     } else {
         isSending.value = false;
     }
@@ -522,7 +523,7 @@ const controlStop = () => {
 
     const topic = controlTopic.value + channel.value;
     $mqtt.publish(topic, 'stop');
-    console.log(`📩 [${channel.value}] sent: control stop`);
+    console.log(`📩 [${channel.value}] sent: stop`);
 
     setTimeout(() => { isStopping.value = false; }, 400);
 };
