@@ -81,7 +81,9 @@ export const generateLogoCode = (config: LogoProgramSettings): string => {
     ]
     output1234,
     setpower 60
-    show "Record Press *"
+    assetadd 1 3 20 0 "Record Press *"
+    assetadd 1 4 20 0 "Play Press #"
+
     forever
     [
         if (new_ir)
@@ -105,7 +107,8 @@ export const generateLogoCode = (config: LogoProgramSettings): string => {
                     set is_record (0) 
                     publish_commands
                     cls
-                    show "Play Press #"
+                    assetwrite 0 "Record Press *"
+                    assetwrite 1 "Play Press #"
                 ]
             ]
 
@@ -122,7 +125,8 @@ export const generateLogoCode = (config: LogoProgramSettings): string => {
                     set is_playback (0) 
                     clear_playback
                     cls
-                    show "Record Press *"
+                    assetwrite 0 "Record Press *"
+                    assetwrite 1 "Play Press #"
                 ]
             ]
             _then ( ir_code = 24 ) 
