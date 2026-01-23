@@ -1,6 +1,6 @@
 {
   "name": "gogo-pgc-webapp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,6 +15,7 @@
   "dependencies": {
     "@tailwindcss/vite": "^4.0.6",
     "blockly": "^11.2.1",
+    "marked": "^12.0.2",
     "mqtt": "^5.10.3",
     "nuxt": "^4.0.0",
     "tailwindcss": "^4.0.6",

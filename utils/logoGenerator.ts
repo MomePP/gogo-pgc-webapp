@@ -28,7 +28,9 @@ export const generateLogoCode = (config: LogoProgramSettings): string => {
     set index 4
     set ir_code 0
     set new_ir 0
-
+    set hue_red 0
+    set hue_green 85
+    
     subscribemessage "gogo-pgc/blockly/${config.channel}"
     [
         beep
@@ -79,7 +81,9 @@ export const generateLogoCode = (config: LogoProgramSettings): string => {
     ]
     output1234,
     setpower 60
-    show "Record Press *"
+    assetadd 1 3 20 0 "Record Press *"
+    assetadd 1 4 20 0 "Play Press #"
+
     forever
     [
         if (new_ir)
@@ -94,6 +98,7 @@ export const generateLogoCode = (config: LogoProgramSettings): string => {
                 [ 
                     set is_record (1) 
                     clear_records
+                    bgcolor hue_red
                     show "Recording..."
                     beep
                 ]
@@ -101,7 +106,9 @@ export const generateLogoCode = (config: LogoProgramSettings): string => {
                 [ 
                     set is_record (0) 
                     publish_commands
-                    show "Play Press # "
+                    cls
+                    assetwrite 0 "Record Press *"
+                    assetwrite 1 "Play Press #"
                 ]
             ]
 
@@ -111,12 +118,15 @@ export const generateLogoCode = (config: LogoProgramSettings): string => {
                 _if (is_playback = 0)
                 [
                     set is_playback (1) 
+                    bgcolor hue_green
                 ]
                 _then (is_playback = 1)
                 [
                     set is_playback (0) 
                     clear_playback
-                    show "Record Press *"
+                    cls
+                    assetwrite 0 "Record Press *"
+                    assetwrite 1 "Play Press #"
                 ]
             ]
             _then ( ir_code = 24 ) 
@@ -214,6 +224,7 @@ to playback
         set index (4) 
     ]
     set index (4) 
+    cls
     show "finished"
 end
 

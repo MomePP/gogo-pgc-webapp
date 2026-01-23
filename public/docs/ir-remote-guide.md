@@ -8,26 +8,13 @@ The infrared (IR) remote control allows you to wirelessly control your GoGo Robo
 
 ## Remote Layout
 
-```
-    ┌─────────────────────┐
-    │    [POWER]  [MODE]  │
-    │                     │
-    │         [▲]         │
-    │    [◄]  [OK]  [►]   │
-    │         [▼]         │
-    │                     │
-    │   [1]  [2]  [3]     │
-    │   [4]  [5]  [6]     │
-    │   [7]  [8]  [9]     │
-    │   [*]  [0]  [#]     │
-    └─────────────────────┘
-```
+![IR Remote Control](ir-remote-annotated-en.jpg)
 
 ---
 
 ## Button Functions
 
-### Navigation Buttons
+### Navigation and Control Buttons
 
 | Button | Function | Description |
 |--------|----------|-------------|
@@ -35,58 +22,38 @@ The infrared (IR) remote control allows you to wirelessly control your GoGo Robo
 | **▼ (Down)** | Backward | Moves the robot car backward |
 | **◄ (Left)** | Turn Left | Rotates the robot car counter-clockwise |
 | **► (Right)** | Turn Right | Rotates the robot car clockwise |
-| **OK** | Stop | Immediately stops all movement |
+| **OK** | Beep | Makes the robot beep |
 
-### Control Buttons
-
-| Button | Function | Description |
-|--------|----------|-------------|
-| **POWER** | Power Toggle | Turns the remote signal on/off |
-| **MODE** | Mode Switch | Cycles between control modes |
-
-### Number Buttons
+### Programming Buttons
 
 | Button | Function | Description |
 |--------|----------|-------------|
-| **1** | Speed 1 | Sets movement to slowest speed |
-| **2** | Speed 2 | Sets movement to medium-slow speed |
-| **3** | Speed 3 | Sets movement to medium speed |
-| **4** | Speed 4 | Sets movement to medium-fast speed |
-| **5** | Speed 5 | Sets movement to fastest speed |
-| **6** | Beep | Makes the robot beep |
-| **7** | Record | Starts recording commands |
-| **8** | Play | Plays back recorded commands |
-| **9** | Clear | Clears recorded commands |
-| **0** | Stop All | Emergency stop - halts everything |
-
-### Special Buttons
-
-| Button | Function | Description |
-|--------|----------|-------------|
-| **\*** | Custom A | User-programmable function |
-| **#** | Custom B | User-programmable function |
+| **\*** | Start / Stop Recording | Press once to start recording, press again to stop and send code to Web app |
+| **#** | Code Playback | Plays back the recorded movement sequence |
 
 ---
 
-## Operating Modes
+## How to Use the Remote
 
-### Direct Control Mode (Default)
+### Recording a Sequence
 
-In this mode, the robot responds immediately to button presses:
-- Press and hold directional buttons for continuous movement
-- Release to stop
+1. **Start Recording**: Press the **\*** button to begin recording
+   - The robot will indicate recording mode
+2. **Record Movements**: Press the arrow buttons and OK button to record your sequence
+   - Arrow keys control robot movement
+   - OK button records a beep command
+3. **Stop and Upload**: Press **\*** again to stop recording and send the code to the Web app
+   - **Note**: The robot must be connected to WiFi for the code to be uploaded
 
-### Recording Mode
+### Playing Back a Sequence
 
-1. Press **7 (Record)** to start recording
-2. Press directional buttons to record a sequence
-3. Press **7** again to stop recording
+- Press the **#** button to execute the recorded movement sequence
+- The robot will perform all recorded commands in order
 
-### Playback Mode
+### Direct Control
 
-1. Press **8 (Play)** to execute recorded sequence
-2. Robot will perform all recorded commands in order
-3. Press **0 (Stop All)** to cancel playback
+- While not recording, the arrow keys work normally for direct robot control
+- You can drive the robot manually at any time when not in recording mode
 
 ---
 
@@ -100,7 +67,7 @@ In this mode, the robot responds immediately to button presses:
 
 ### Battery Care
 
-- Use fresh AAA batteries for best signal strength
+- Use fresh CR2025 (or CR2032) batteries for best signal strength
 - Remove batteries if not using for extended periods
 - Replace batteries when response becomes sluggish
 
@@ -110,7 +77,7 @@ In this mode, the robot responds immediately to button presses:
 |---------|----------|
 | No response | Check batteries, ensure robot is powered on |
 | Intermittent response | Move closer, check for IR interference |
-| Wrong commands executed | Reset robot, re-sync remote |
+| Code not uploading | Ensure robot is connected to WiFi |
 | Delayed response | Replace batteries |
 
 ---
@@ -124,16 +91,3 @@ Avoid using the remote near:
 - Reflective surfaces
 
 ---
-
-## Quick Reference Card
-
-```
-Movement:     ▲ = Forward    ▼ = Back    ◄ = Left    ► = Right
-Speed:        1-5 (slow to fast)
-Recording:    7 = Record    8 = Play    9 = Clear
-Emergency:    OK or 0 = Stop
-```
-
----
-
-*This is placeholder content. Please update with actual remote specifications and images.*

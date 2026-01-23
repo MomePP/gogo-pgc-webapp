@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { marked } from 'marked'
 
 const props = defineProps<{
     show: boolean
@@ -23,74 +24,48 @@ const fetchMarkdown = async () => {
     error.value = ''
 
     try {
-        const response = await fetch(props.markdownUrl)
-        if (!response.ok) throw new Error('Failed to load content')
+        const config = useRuntimeConfig()
+        const baseURL = config.app.baseURL || '/'
+        const fullUrl = props.markdownUrl.startsWith('http')
+            ? props.markdownUrl
+            : `${baseURL}${props.markdownUrl.replace(/^\//, '')}`
+
+        const response = await fetch(fullUrl)
+        if (!response.ok) throw new Error(`Failed to load content: ${response.status} ${response.statusText}`)
+
         const text = await response.text()
-        markdownContent.value = parseMarkdown(text)
+
+        // Parse markdown with default settings
+        const parsed = marked.parse(text, {
+            breaks: true,
+            gfm: true
+        })
+
+        console.log('Type of parsed:', typeof parsed)
+        console.log('Parsed value:', parsed)
+        console.log('First 500 chars:', String(parsed).substring(0, 500))
+
+        let html = String(parsed)
+
+        // Add CSS classes manually
+        html = html.replace(/<table>/g, '<table class="md-table">')
+        html = html.replace(/<ul>/g, '<ul class="md-list">')
+        html = html.replace(/<ol>/g, '<ol class="md-list">')
+        html = html.replace(/<a href="([^"]+)"/g, '<a href="$1" target="_blank" class="md-link"')
+        html = html.replace(/<code>/g, '<code class="inline-code">')
+        html = html.replace(/<pre><code class="inline-code">/g, '<pre class="code-block"><code>')
+
+        // Fix image paths
+        html = html.replace(/<img src="(?!http)(?!\/)([^"]+)"/g, `<img src="${baseURL}docs/$1" class="md-image"`)
+        html = html.replace(/<img src="([^"]+)" alt/g, '<img src="$1" class="md-image" alt')
+
+        markdownContent.value = html
     } catch (err) {
         error.value = 'Failed to load content'
-        console.error(err)
+        console.error('Markdown fetch error:', err)
     } finally {
         isLoading.value = false
     }
-}
-
-// Simple markdown parser
-const parseMarkdown = (md: string): string => {
-    let html = md
-
-    // Escape HTML
-    html = html.replace(/</g, '&lt;').replace(/>/g, '&gt;')
-
-    // Code blocks (```)
-    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre class="code-block"><code>$2</code></pre>')
-
-    // Inline code
-    html = html.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>')
-
-    // Headers
-    html = html.replace(/^### (.*$)/gm, '<h3>$1</h3>')
-    html = html.replace(/^## (.*$)/gm, '<h2>$1</h2>')
-    html = html.replace(/^# (.*$)/gm, '<h1>$1</h1>')
-
-    // Bold
-    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-
-    // Italic
-    html = html.replace(/\*(.*?)\*/g, '<em>$1</em>')
-
-    // Horizontal rules
-    html = html.replace(/^---$/gm, '<hr>')
-
-    // Tables
-    html = html.replace(/^\|(.+)\|$/gm, (match, content) => {
-        const cells = content.split('|').map((c: string) => c.trim())
-        const isHeader = cells.some((c: string) => /^-+$/.test(c))
-        if (isHeader) return ''
-        const tag = 'td'
-        return '<tr>' + cells.map((c: string) => `<${tag}>${c}</${tag}>`).join('') + '</tr>'
-    })
-
-    // Wrap consecutive table rows
-    html = html.replace(/(<tr>.*?<\/tr>\n?)+/g, '<table class="md-table">$&</table>')
-
-    // Links
-    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" class="md-link">$1</a>')
-
-    // Lists (unordered)
-    html = html.replace(/^- (.*$)/gm, '<li>$1</li>')
-    html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul class="md-list">$&</ul>')
-
-    // Numbered lists
-    html = html.replace(/^\d+\. (.*$)/gm, '<li>$1</li>')
-
-    // Paragraphs (wrap remaining text blocks)
-    html = html.replace(/^(?!<[hpuolta]|<hr|<pre|<code)(.+)$/gm, '<p>$1</p>')
-
-    // Clean up empty paragraphs
-    html = html.replace(/<p>\s*<\/p>/g, '')
-
-    return html
 }
 
 // Handle escape key
@@ -319,14 +294,25 @@ onUnmounted(() => {
     font-size: 0.875rem;
 }
 
+.markdown-body :deep(.md-table th) {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #e5e7eb;
+    background: #f9fafb;
+    font-weight: 600;
+    text-align: left;
+}
+
 .markdown-body :deep(.md-table td) {
     padding: 0.5rem 0.75rem;
     border: 1px solid #e5e7eb;
 }
 
-.markdown-body :deep(.md-table tr:first-child td) {
-    background: #f9fafb;
-    font-weight: 600;
+.markdown-body :deep(.md-image) {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.5rem;
+    margin: 1rem 0;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
 .markdown-body :deep(.md-link) {
@@ -345,6 +331,20 @@ onUnmounted(() => {
 
 .markdown-body :deep(.md-list li) {
     margin: 0.25rem 0;
+}
+
+.markdown-body :deep(ol.md-list) {
+    list-style-type: decimal;
+}
+
+.markdown-body :deep(ul.md-list) {
+    list-style-type: disc;
+}
+
+.markdown-body :deep(.md-list-nested) {
+    margin: 0.25rem 0;
+    padding-left: 1.5rem;
+    list-style-type: circle;
 }
 
 .markdown-body :deep(strong) {
