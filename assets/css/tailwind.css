@@ -1,1 +1,85 @@
 @import "tailwindcss";
+
+/* Blockly Bunch Highlight */
+.blockly-bunch-highlight > .blocklyPath {
+    stroke: #3B82F6 !important;
+    stroke-width: 3px !important;
+    filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.6));
+}
+
+/* Combine Popup Button */
+.combine-popup {
+    position: absolute;
+    z-index: 1000;
+    background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+    color: white;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+    transition: all 0.15s ease;
+    border: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.combine-popup:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.5);
+}
+
+.combine-popup:active {
+    transform: scale(0.98);
+}
+
+.combine-popup-icon {
+    width: 16px;
+    height: 16px;
+}
+
+/* Separate Popup Button */
+.separate-popup {
+    position: absolute;
+    z-index: 1000;
+    background: linear-gradient(135deg, #F59E0B 0%, #EF4444 100%);
+    color: white;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+    transition: all 0.15s ease;
+    border: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.separate-popup:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 16px rgba(245, 158, 11, 0.5);
+}
+
+.separate-popup:active {
+    transform: scale(0.98);
+}
+
+.separate-popup-icon {
+    width: 16px;
+    height: 16px;
+}
+
+/* Limit combined block COUNT input to 2 digits */
+.blocklyHtmlInput[data-field-type="number"] {
+    max-width: 3ch;
+    text-align: center;
+}
+
+/* Hide SVG text when field is being edited (prevents ghosting) */
+.blocklyEditing > .blocklyFieldText {
+    visibility: hidden;
+}

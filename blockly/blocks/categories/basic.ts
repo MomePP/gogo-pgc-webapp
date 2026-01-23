@@ -15,7 +15,6 @@ export default function (Blockly: any) {
             helpUrl: ''
         },
     ])
-    console.log('main_start blocks:', blocks)
 
     return blocks
 }
