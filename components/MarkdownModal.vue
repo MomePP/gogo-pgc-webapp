@@ -41,9 +41,9 @@ const fetchMarkdown = async () => {
             gfm: true
         })
 
-        console.log('Type of parsed:', typeof parsed)
-        console.log('Parsed value:', parsed)
-        console.log('First 500 chars:', String(parsed).substring(0, 500))
+        // console.log('Type of parsed:', typeof parsed)
+        // console.log('Parsed value:', parsed)
+        // console.log('First 500 chars:', String(parsed).substring(0, 500))
 
         let html = String(parsed)
 

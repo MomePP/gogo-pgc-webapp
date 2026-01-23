@@ -8,7 +8,7 @@ export default defineNuxtConfig({
   css: ["@/assets/css/tailwind.css"],
   ssr: false,
   app: {
-    baseURL: '/gogo-pgc-webapp',
+    baseURL: '/gogo-pgc-webapp/',
   },
   nitro: {
     preset: 'static'
