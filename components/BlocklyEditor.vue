@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, onBeforeUnmount, ref } from 'vue';
 import { useMqttConnection } from '~/composables/useMqttConnection';
-import { isSidebarCollapsed, notify } from '~/composables/useLayoutState';
+import { isSidebarCollapsed, notify, notifyWithUndo } from '~/composables/useLayoutState';
 
 import * as Blockly from "blockly/core";
 import * as En from "blockly/msg/en";
@@ -21,6 +21,10 @@ const remoteTopic = ref(useRuntimeConfig().public.mqttRemoteTopic || "");
 const blocklyTopic = ref(useRuntimeConfig().public.mqttBlocklyTopic || "");
 const controlTopic = ref(useRuntimeConfig().public.mqttControlTopic || "");
 let onMessageHandler; // Store the event handler reference
+let previousWorkspaceXml = null; // For undo feature (stores XML Element)
+
+// localStorage key for workspace persistence
+const WORKSPACE_STORAGE_KEY = 'gogo_blockly_workspace';
 
 const generatedCode = ref('');
 let workspace = Blockly.WorkspaceSvg;
@@ -144,7 +148,10 @@ onMounted(() => {
         trashcan: true
     });
 
-    initWorkspace()
+    // Load workspace from localStorage or initialize with default
+    if (!loadWorkspaceFromStorage()) {
+        initWorkspace();
+    }
     workspace.scrollCenter()
 
     // Keep the flyout always visible
@@ -292,6 +299,10 @@ onMounted(() => {
             commandsPart = commandPacket.slice(4);
         }
 
+        // Save current workspace state before clearing (for undo feature)
+        const savedState = saveWorkspaceState();
+        previousWorkspaceXml = savedState;
+
         // Clear all existing blocks and reinitialize workspace
         clearBlocks();
 
@@ -308,15 +319,35 @@ onMounted(() => {
         for (const command of resolveCommandPacket(commandsPart)) {
             createBlockFromCommand(command);
         }
+
+        // Show undo toast if there was previous content
+        if (savedState) {
+            notifyWithUndo('Code loaded from robot', () => {
+                if (previousWorkspaceXml) {
+                    restoreWorkspaceState(previousWorkspaceXml);
+                    previousWorkspaceXml = null;
+                }
+            }, 10000);
+        } else {
+            notify('Code loaded from robot', 'success');
+        }
     };
 
     // Attach the event listener
     $mqtt.on("message", onMessageHandler);
+
+    // Save workspace to localStorage when page is closed/refreshed
+    window.addEventListener('beforeunload', saveWorkspaceToStorage);
 });
 
 onBeforeUnmount(() => {
+    // Save workspace before unmounting
+    saveWorkspaceToStorage();
+
+    // Cleanup event listeners
+    window.removeEventListener('beforeunload', saveWorkspaceToStorage);
     if ($mqtt) {
-        $mqtt.removeListener("message", onMessageHandler); // Remove listener
+        $mqtt.removeListener("message", onMessageHandler);
     }
 });
 
@@ -435,9 +466,49 @@ const initWorkspace = () => {
     Blockly.Xml.domToWorkspace(xmlWorkspace, workspace)
 }
 
+// Save workspace to localStorage
+const saveWorkspaceToStorage = () => {
+    try {
+        const xmlDom = Blockly.Xml.workspaceToDom(workspace);
+        const xmlText = Blockly.Xml.domToText(xmlDom);
+        localStorage.setItem(WORKSPACE_STORAGE_KEY, xmlText);
+    } catch (e) {
+        console.warn('Failed to save workspace to localStorage:', e);
+    }
+};
+
+// Load workspace from localStorage
+const loadWorkspaceFromStorage = () => {
+    try {
+        const xmlText = localStorage.getItem(WORKSPACE_STORAGE_KEY);
+        if (xmlText) {
+            const xmlDom = Blockly.utils.xml.textToDom(xmlText);
+            Blockly.Xml.domToWorkspace(xmlDom, workspace);
+            return true;
+        }
+    } catch (e) {
+        console.warn('Failed to load workspace from localStorage:', e);
+    }
+    return false;
+};
+
 const clearBlocks = () => {
     workspace.clear()
     initWorkspace()
+};
+
+// Undo feature: Save workspace state before overwriting
+const saveWorkspaceState = () => {
+    const mainStart = workspace.getAllBlocks().find(b => b.type === 'main_start');
+    const hasContent = mainStart?.getInput('statement')?.connection?.isConnected();
+    return hasContent ? Blockly.Xml.workspaceToDom(workspace) : null;
+};
+
+// Undo feature: Restore workspace from saved state
+const restoreWorkspaceState = (xmlDom) => {
+    workspace.clear();
+    Blockly.Xml.domToWorkspace(xmlDom, workspace);
+    notify('Code restored!', 'success');
 };
 
 const controlDownload = () => {
@@ -497,6 +568,7 @@ const controlRun = () => {
 
 const isSending = ref(false);
 const isStopping = ref(false);
+const isUploading = ref(false);
 
 const handleRunCode = () => {
     if (isSending.value) return;
@@ -526,6 +598,17 @@ const controlStop = () => {
     console.log(`📩 [${channel.value}] sent: stop`);
 
     setTimeout(() => { isStopping.value = false; }, 400);
+};
+
+const controlUpload = () => {
+    if (isUploading.value) return;
+    isUploading.value = true;
+
+    const topic = controlTopic.value + channel.value;
+    $mqtt.publish(topic, 'upload');
+    console.log(`📩 [${channel.value}] sent: upload`);
+
+    setTimeout(() => { isUploading.value = false; }, 400);
 };
 
 // Combine blocks feature functions
@@ -672,7 +755,21 @@ const handleSeparate = () => {
                     </svg>
                     <span>{{ isSending ? 'Sending...' : 'Run Code' }}</span>
                 </button>
-                
+
+                <!-- Upload from Robot Button -->
+                <button @click="controlUpload" :disabled="isUploading || isSending || isStopping"
+                    class='flex items-center size-10 justify-center rounded-full transition-all duration-150 border'
+                    :class="isUploading ? 'bg-indigo-50 text-indigo-300 border-indigo-100 cursor-not-allowed scale-95' : 'bg-indigo-100 text-indigo-700 border-indigo-300 hover:bg-indigo-200 hover:border-indigo-400'"
+                    title="Upload from Robot">
+                    <svg v-if="isUploading" class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <svg v-else xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                    </svg>
+                </button>
+
                 <button @click="controlStop" :disabled="isStopping"
                     class='flex items-center size-10 justify-center rounded-full transition-all duration-150 border'
                     :class="isStopping ? 'bg-red-50 text-red-300 border-red-100 cursor-not-allowed scale-95' : 'bg-red-100 text-red-700 border-red-300 hover:bg-red-200 hover:border-red-400'">

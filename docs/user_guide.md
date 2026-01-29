@@ -140,7 +140,16 @@ Users can interact with the command blocks in the following ways:
 | Button | Function |
 |--------|----------|
 | **Run Code** | Sends the current block sequence to the robot for execution |
+| **Upload** | Manually triggers the robot to upload its current code to the webapp |
 | **Stop** | Stops the currently running program on the robot |
+
+![Run, Upload, and Stop buttons](images/run-upload-stop-buttons.png)
+
+> [!TIP]
+> **When to use the Upload button**: Normally, the robot automatically uploads code after a recording session ends. Use the Upload button if:
+> - The automatic upload didn't work
+> - The robot lost WiFi connection during recording
+> - The webapp was not open at the time of recording
 
 ---
 
@@ -177,3 +186,4 @@ The following images are available in `docs/images/` for reuse in user-facing do
 | `setup-step4-card.png` | Settings card with time constants |
 | `setup-configure-robot-button.png` | Orange "Configure Robot" button |
 | `send-receive-commands-robot-id-match-ui.png` | Robot ID matching UI for command sync |
+| `run-upload-stop-buttons.png` | Run, Upload, and Stop execution control buttons |

@@ -16,6 +16,7 @@ export const generateLogoCode = (config: LogoProgramSettings): string => {
     set stop2 "S"
     set program_run "run"
     set program_stop "stop"
+    set program_upload "upload"
     set beep_key "P"
     set program_repeat 1
     set playback_wait (${config.playbackWait}) 
@@ -30,6 +31,7 @@ export const generateLogoCode = (config: LogoProgramSettings): string => {
     set new_ir 0
     set hue_red 0
     set hue_green 85
+    set need_to_upload 0
     
     subscribemessage "gogo-pgc/blockly/${config.channel}"
     [
@@ -50,6 +52,11 @@ export const generateLogoCode = (config: LogoProgramSettings): string => {
         if ( message = program_stop )
         [
             set is_playback (0) 
+        ]
+        if ( message = program_upload )
+        [
+            beep
+            set need_to_upload (1) 
         ]
     ]
     dobackground
@@ -156,6 +163,11 @@ export const generateLogoCode = (config: LogoProgramSettings): string => {
             wait 300
             playback
             set is_playback (0) 
+        ]
+        if need_to_upload
+        [
+            set need_to_upload (0) 
+            publish_commands
         ]
     ]
 end

@@ -1,5 +1,5 @@
 <script setup lang='ts'>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { useMqttConnection } from '~/composables/useMqttConnection';
 import { generateLogoCode } from '~/utils/logoGenerator';
 import { isSidebarCollapsed, toggleSidebar, notify } from '~/composables/useLayoutState';
@@ -26,9 +26,43 @@ const noWifi = ref(false)
 
 const programConfig = ref({
     playbackWait: 500, // milliseconds
-    turnWait: 200,    // milliseconds  
+    turnWait: 200,    // milliseconds
     moveWait: 300     // milliseconds
 })
+
+// localStorage keys for settings persistence
+const SETTINGS_STORAGE_KEY = 'gogo_settings';
+
+// Save settings to localStorage
+const saveSettingsToStorage = () => {
+    try {
+        const settings = {
+            wifiSsid: wifiConfig.value.ssid,
+            noWifi: noWifi.value,
+            programConfig: programConfig.value
+        };
+        localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+    } catch (e) {
+        console.warn('Failed to save settings to localStorage:', e);
+    }
+};
+
+// Load settings from localStorage
+const loadSettingsFromStorage = () => {
+    try {
+        const saved = localStorage.getItem(SETTINGS_STORAGE_KEY);
+        if (saved) {
+            const settings = JSON.parse(saved);
+            if (settings.wifiSsid) wifiConfig.value.ssid = settings.wifiSsid;
+            if (settings.noWifi !== undefined) noWifi.value = settings.noWifi;
+            if (settings.programConfig) {
+                programConfig.value = { ...programConfig.value, ...settings.programConfig };
+            }
+        }
+    } catch (e) {
+        console.warn('Failed to load settings from localStorage:', e);
+    }
+};
 
 onMounted(() => {
     if (!$mqtt) {
@@ -54,6 +88,20 @@ onMounted(() => {
         // Randomize if no saved channel
         localChannel.value = Math.floor(10000 + Math.random() * 90000).toString()
     }
+
+    // Load saved settings from localStorage
+    loadSettingsFromStorage();
+
+    // Save settings when page is closed/refreshed
+    window.addEventListener('beforeunload', saveSettingsToStorage);
+});
+
+onBeforeUnmount(() => {
+    // Save settings before unmounting
+    saveSettingsToStorage();
+
+    // Cleanup event listener
+    window.removeEventListener('beforeunload', saveSettingsToStorage);
 });
 
 const generateProgramSettings = () => {

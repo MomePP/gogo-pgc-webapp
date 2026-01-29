@@ -1,7 +1,12 @@
 <script setup>
 import SettingsPanel from "~/components/SettingsPanel.vue";
 import BlocklyEditor from "~/components/BlocklyEditor.vue";
-import { isSidebarCollapsed, toggleSidebar } from '~/composables/useLayoutState';
+import { isSidebarCollapsed, toggleSidebar, notifications, dismissNotification } from '~/composables/useLayoutState';
+
+const handleNotificationAction = (noti) => {
+    noti.action?.handler?.();
+    dismissNotification(noti.id);
+};
 </script>
 
 <template>
@@ -32,6 +37,15 @@ import { isSidebarCollapsed, toggleSidebar } from '~/composables/useLayoutState'
         </svg>
 
         <span class="text-xs font-bold uppercase tracking-wider">{{ noti.message }}</span>
+
+        <!-- Action Button -->
+        <button v-if="noti.action" @click="handleNotificationAction(noti)"
+            class="ml-2 px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-lg transition-all"
+            :class="noti.type === 'info' ? 'bg-blue-200 hover:bg-blue-300 text-blue-800' :
+                    noti.type === 'success' ? 'bg-green-200 hover:bg-green-300 text-green-800' :
+                    'bg-red-200 hover:bg-red-300 text-red-800'">
+            {{ noti.action.label }}
+        </button>
       </div>
     </transition-group>
 
