@@ -27,11 +27,11 @@ const noWifi = ref(false)
 const programConfig = ref({
     playbackWait: 500, // milliseconds
     turnWait: 200,    // milliseconds
-    moveWait: 300     // milliseconds
+    moveWait: 1000     // milliseconds
 })
 
 // localStorage keys for settings persistence
-const SETTINGS_STORAGE_KEY = 'gogo_settings';
+const SETTINGS_STORAGE_KEY = 'gogo_settings_v2';
 
 // Save settings to localStorage
 const saveSettingsToStorage = () => {

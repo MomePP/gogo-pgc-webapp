@@ -6,7 +6,7 @@ export interface LogoProgramSettings {
 }
 
 export const generateLogoCode = (config: LogoProgramSettings): string => {
-    return `to start
+    return `to autorun
     set command 0
     set commands "0001"
     set forward2 "F"
@@ -88,6 +88,7 @@ export const generateLogoCode = (config: LogoProgramSettings): string => {
     ]
     output1234,
     setpower 60
+    assetadd 1 1 20 0 "${config.channel}"
     assetadd 1 3 20 0 "Record Press *"
     assetadd 1 4 20 0 "Play Press #"
 

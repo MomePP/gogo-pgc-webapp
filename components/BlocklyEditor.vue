@@ -145,6 +145,11 @@ onMounted(() => {
             minScale: 0.3,
             scaleSpeed: 1.2
         },
+        move: {
+            scrollbars: true,
+            drag: true,
+            wheel: true
+        },
         trashcan: true
     });
 
